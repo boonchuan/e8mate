@@ -1,0 +1,42 @@
+id: e8-outdated-iis
+
+info:
+  name: Essential Eight - Outdated IIS Version
+  author: e8mate
+  severity: high
+  description: |
+    Detects outdated versions of Microsoft IIS web server. Per Essential Eight
+    patch applications requirements, internet-facing applications must be
+    patched within two weeks of release at ML1.
+  tags: essential-eight,e8,patch-applications,iis,australia,compliance
+  reference:
+    - https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model
+  metadata:
+    e8-control: patch_applications
+    e8-maturity-level: 1
+    max-request: 1
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - "(?i)Server: Microsoft-IIS/([0-9.]+)"
+
+      - type: regex
+        part: header
+        regex:
+          - "(?i)Server: Microsoft-IIS/(6\\.0|7\\.0|7\\.5|8\\.0|8\\.5)"
+        condition: or
+
+    extractors:
+      - type: regex
+        part: header
+        regex:
+          - "(?i)Server: Microsoft-IIS/([0-9.]+)"
+        group: 1

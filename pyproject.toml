@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "e8mate"
+version = "0.1.0"
+description = "Open-source Essential Eight compliance scanner for Australian organisations"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Boon", email = "boon@e8mate.dev" },
+]
+keywords = ["cybersecurity", "essential-eight", "compliance", "australia", "asd", "acsc"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1.0",
+    "requests>=2.31.0",
+    "pywinrm>=0.4.0;platform_system=='Windows' or platform_system=='Linux'",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+cloud = [
+    "msal>=1.24.0",
+]
+
+[project.scripts]
+e8mate = "e8mate.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/e8mate/e8mate"
+Documentation = "https://e8mate.dev/docs"
+Repository = "https://github.com/e8mate/e8mate"
+Issues = "https://github.com/e8mate/e8mate/issues"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

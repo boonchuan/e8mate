@@ -1,0 +1,44 @@
+id: e8-rdp-exposed
+
+info:
+  name: Essential Eight - RDP Exposed Without NLA
+  author: e8mate
+  severity: high
+  description: |
+    Detects Remote Desktop Protocol (RDP) exposed to the network without
+    Network Level Authentication (NLA) enforced. Per Essential Eight,
+    remote access services should require multi-factor authentication
+    and NLA should be enabled to reduce attack surface.
+  tags: essential-eight,e8,mfa,admin-privileges,rdp,australia,compliance
+  reference:
+    - https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model
+  metadata:
+    e8-control: multi_factor_authentication
+    e8-maturity-level: 1
+    max-request: 1
+
+network:
+  - inputs:
+      - data: |
+          {{hex_decode('030000130ee00000000000010008000b000000')}}
+
+    host:
+      - "{{Hostname}}"
+    port: 3389
+
+    matchers-condition: and
+    matchers:
+      - type: binary
+        binary:
+          - "0300"  # TPKT header
+        part: body
+
+      - type: word
+        words:
+          - "03"  # RDP Negotiation Response
+        part: body
+
+    extractors:
+      - type: dsl
+        dsl:
+          - '"RDP service detected on " + Host + ":3389 - verify NLA and MFA are enforced"'

@@ -1,0 +1,215 @@
+# Essential Eight Maturity Level 1 Rules
+# Based on ASD Essential Eight Maturity Model (November 2023)
+# Reference: https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model
+
+maturity_level: 1
+
+# ML1 adversary profile:
+# Malicious actors who are content to simply leverage commodity tradecraft
+# that is widely available in order to gain unauthorised access. They seek
+# common weaknesses in systems and are not motivated to target specific
+# organisations. They opportunistically use common social engineering
+# techniques to trick users.
+
+controls:
+
+  application_control:
+    description: >
+      Application control is implemented on workstations to restrict the
+      execution of executables, software libraries, scripts, installers,
+      compiled HTML, HTML applications and control panel applets to an
+      organisation-approved set.
+    checks:
+      - id: AC-ML1-001
+        title: Application control implemented on workstations
+        check_type: applocker_or_wdac_enforced
+        severity: critical
+      - id: AC-ML1-002
+        title: Application control restricts executables
+        check_type: applocker_exe_rules
+        severity: critical
+      - id: AC-ML1-003
+        title: Microsoft recommended block rules applied
+        check_type: ms_block_rules
+        severity: important
+      - id: AC-ML1-004
+        title: Application control applied to user-writable paths
+        check_type: user_writable_paths_blocked
+        severity: important
+
+  patch_applications:
+    description: >
+      Patches, updates or vendor mitigations for vulnerabilities in
+      internet-facing services are applied within two weeks of release.
+      Patches for other applications within one month. Applications no
+      longer supported by vendors are removed.
+    checks:
+      - id: PA-ML1-001
+        title: Internet-facing applications patched within 2 weeks
+        check_type: internet_app_patch_age
+        severity: critical
+        threshold_days: 14
+      - id: PA-ML1-002
+        title: Other applications patched within 1 month
+        check_type: general_app_patch_age
+        severity: high
+        threshold_days: 30
+      - id: PA-ML1-003
+        title: Unsupported applications removed
+        check_type: eol_apps_detected
+        severity: critical
+      - id: PA-ML1-004
+        title: Vulnerability scanner used at least fortnightly
+        check_type: vuln_scan_frequency
+        severity: medium
+        threshold_days: 14
+
+  macro_settings:
+    description: >
+      Microsoft Office macros are disabled for users that do not have
+      a demonstrated business requirement.
+    checks:
+      - id: MS-ML1-001
+        title: Macros disabled for standard users
+        check_type: macro_vba_warnings
+        severity: critical
+        expected_value: 4  # Disable all
+      - id: MS-ML1-002
+        title: Macros from internet are blocked
+        check_type: macro_internet_blocked
+        severity: critical
+      - id: MS-ML1-003
+        title: Macro antivirus scanning enabled
+        check_type: macro_av_scan
+        severity: high
+
+  user_application_hardening:
+    description: >
+      Web browsers do not process Java from the internet. Web browsers
+      do not process web advertisements from the internet. Internet
+      Explorer 11 does not process content from the internet.
+      PowerShell event logging enabled.
+    checks:
+      - id: AH-ML1-001
+        title: Web browsers do not process Java from internet
+        check_type: java_disabled_browser
+        severity: high
+      - id: AH-ML1-002
+        title: Web ads are blocked
+        check_type: ad_blocking
+        severity: medium
+      - id: AH-ML1-003
+        title: Internet Explorer 11 disabled or not used
+        check_type: ie11_disabled
+        severity: high
+      - id: AH-ML1-004
+        title: .NET Framework 3.5 (includes .NET 2.0 and 3.0) disabled
+        check_type: dotnet_legacy_disabled
+        severity: medium
+      - id: AH-ML1-005
+        title: PowerShell script block logging enabled
+        check_type: ps_script_logging
+        severity: high
+
+  restrict_admin_privileges:
+    description: >
+      Requests for privileged access to systems and applications are
+      validated when first requested. Privileged accounts are not used
+      for reading email and browsing the web.
+    checks:
+      - id: AP-ML1-001
+        title: Privileged accounts validated and documented
+        check_type: admin_account_audit
+        severity: critical
+      - id: AP-ML1-002
+        title: Admin accounts not used for email/web
+        check_type: admin_no_email_web
+        severity: critical
+      - id: AP-ML1-003
+        title: Default admin accounts disabled or renamed
+        check_type: default_admin_disabled
+        severity: high
+      - id: AP-ML1-004
+        title: Inactive privileged accounts disabled
+        check_type: inactive_admin_accounts
+        severity: high
+        threshold_days: 45
+
+  patch_operating_systems:
+    description: >
+      Patches, updates or vendor mitigations for vulnerabilities in
+      operating systems of internet-facing services are applied within
+      two weeks of release. OS of workstations/servers within one month.
+      Unsupported OS replaced.
+    checks:
+      - id: PO-ML1-001
+        title: Operating system is vendor-supported
+        check_type: os_supported
+        severity: critical
+      - id: PO-ML1-002
+        title: OS build is current
+        check_type: os_version_current
+        severity: high
+      - id: PO-ML1-003
+        title: OS patches applied within one month
+        check_type: os_patch_age
+        severity: high
+        threshold_days: 30
+      - id: PO-ML1-004
+        title: Automatic OS updates configured
+        check_type: auto_update_configured
+        severity: medium
+      - id: PO-ML1-005
+        title: Windows Update service running
+        check_type: wu_service_running
+        severity: medium
+
+  multi_factor_authentication:
+    description: >
+      MFA is used to authenticate users to their organisation's
+      internet-facing services. MFA is used to authenticate users
+      to third-party internet-facing services that process, store
+      or communicate their organisation's sensitive data.
+    checks:
+      - id: MF-ML1-001
+        title: MFA on internet-facing services
+        check_type: mfa_internet_services
+        severity: critical
+      - id: MF-ML1-002
+        title: MFA on third-party services with sensitive data
+        check_type: mfa_third_party
+        severity: critical
+      - id: MF-ML1-003
+        title: MFA uses something users have AND something users know/are
+        check_type: mfa_method_strength
+        severity: high
+      - id: MF-ML1-004
+        title: MFA registered for privileged accounts
+        check_type: mfa_admin_coverage
+        severity: critical
+
+  regular_backups:
+    description: >
+      Backups of important data, software and configuration settings
+      are performed and retained in a coordinated and resilient manner.
+    checks:
+      - id: BK-ML1-001
+        title: Backups are performed
+        check_type: backup_exists
+        severity: critical
+      - id: BK-ML1-002
+        title: Backups performed at frequency aligned to RPO
+        check_type: backup_frequency
+        severity: high
+      - id: BK-ML1-003
+        title: Backups stored in separate location
+        check_type: backup_offsite
+        severity: high
+      - id: BK-ML1-004
+        title: Backup access restricted from unprivileged accounts
+        check_type: backup_access_control
+        severity: high
+      - id: BK-ML1-005
+        title: Backup restoration has been tested
+        check_type: backup_restore_tested
+        severity: medium

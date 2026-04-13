@@ -1,0 +1,64 @@
+# E8Mate Configuration
+# Copy this file to e8mate.yaml and customise for your environment.
+
+# Target maturity level to assess against
+target_maturity_level: 1
+
+# Controls to scan (comment out to scan all)
+# controls:
+#   - patch_os
+#   - patch_apps
+#   - mfa
+#   - admin_privileges
+#   - macro_settings
+#   - app_hardening
+#   - app_control
+#   - backups
+
+# Transport configuration
+transport:
+  type: local  # local, winrm, or cloud
+
+  # WinRM settings (for remote scanning)
+  # winrm:
+  #   host: 192.168.1.100
+  #   port: 5985
+  #   username: admin
+  #   password: ""  # Use --password flag or E8MATE_WINRM_PASSWORD env var
+  #   transport: ntlm  # ntlm, kerberos, or ssl
+
+  # Cloud settings (for M365/Entra ID checks)
+  # cloud:
+  #   tenant_id: "your-tenant-id"
+  #   client_id: "your-app-registration-id"
+  #   client_secret: ""  # Use E8MATE_AZURE_SECRET env var
+
+# Report settings
+report:
+  format: json  # json, html, csv
+  output_dir: ./reports
+  include_evidence: true  # Include raw evidence in reports
+  include_remediation: true  # Include fix recommendations
+
+# Patch assessment settings
+patching:
+  # Custom thresholds (ASD defaults below)
+  internet_facing_patch_days: 14  # ML1: 2 weeks
+  general_patch_days: 30  # ML1: 1 month
+  critical_exploit_patch_hours: 48  # When known exploit exists
+
+  # NVD API key for vulnerability lookups (optional, increases rate limits)
+  # nvd_api_key: ""  # Or use E8MATE_NVD_API_KEY env var
+
+  # Custom list of internet-facing applications (by process name)
+  internet_facing_apps:
+    - chrome
+    - msedge
+    - firefox
+    - outlook
+    - iexplore
+
+# Exclusions (systems or checks to skip)
+# exclusions:
+#   - check_id: PO-ML1-004  # Skip auto-update check if using WSUS
+#     reason: "Managed via WSUS — auto-update intentionally disabled on endpoints"

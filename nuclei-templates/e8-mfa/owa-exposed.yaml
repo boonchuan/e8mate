@@ -1,0 +1,57 @@
+id: e8-owa-exposed
+
+info:
+  name: Essential Eight - Exchange OWA Exposed
+  author: e8mate
+  severity: high
+  description: |
+    Detects Microsoft Exchange Outlook Web Access (OWA) or Exchange Control
+    Panel (ECP) exposed to the internet. These interfaces are high-value
+    targets and should have MFA enforced per Essential Eight requirements.
+    Also extracts version info for patch status assessment.
+  tags: essential-eight,e8,mfa,patch-applications,exchange,australia,compliance
+  reference:
+    - https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model
+  metadata:
+    e8-control: multi_factor_authentication
+    e8-maturity-level: 1
+    max-request: 2
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/owa/auth/logon.aspx"
+      - "{{BaseURL}}/ecp/"
+
+    stop-at-first-match: false
+    host-redirects: true
+    max-redirects: 3
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - "Outlook Web App"
+          - "Outlook Web Access"
+          - "Exchange Control Panel"
+        condition: or
+
+      - type: regex
+        part: header
+        regex:
+          - "(?i)X-OWA-Version: ([0-9.]+)"
+
+    extractors:
+      - type: regex
+        name: owa-version
+        part: header
+        regex:
+          - "(?i)X-OWA-Version: ([0-9.]+)"
+        group: 1
+
+      - type: regex
+        name: exchange-build
+        part: header
+        regex:
+          - "(?i)X-FEServer: ([a-zA-Z0-9-]+)"
+        group: 1

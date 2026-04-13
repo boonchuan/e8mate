@@ -1,0 +1,49 @@
+id: e8-smbv1-enabled
+
+info:
+  name: Essential Eight - SMBv1 Protocol Enabled
+  author: e8mate
+  severity: high
+  description: |
+    Detects if SMBv1 is enabled on the target host. SMBv1 is a legacy protocol
+    with known critical vulnerabilities (EternalBlue/MS17-010) and should be
+    disabled per ASD Essential Eight user application hardening requirements.
+  tags: essential-eight,e8,user-application-hardening,smb,australia,compliance
+  reference:
+    - https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model
+    - https://support.microsoft.com/en-us/topic/how-to-detect-enable-and-disable-smbv1-smbv2-and-smbv3-in-windows
+  classification:
+    cve-id: CVE-2017-0144
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
+    cvss-score: 8.1
+  metadata:
+    e8-control: user_application_hardening
+    e8-maturity-level: 1
+    max-request: 1
+
+network:
+  - inputs:
+      - data: |
+          {{hex_decode('00000085ff534d4272000000001853c8000000000000000000000000000000fffe00000000006200025043204e4554574f524b2050524f4752414d20312e3000024c414e4d414e312e30000257696e646f777320666f7220576f726b67726f75707320332e316100024c4d312e325830303200024c414e4d414e322e3100024e54204c4d20302e313200')}}
+
+    host:
+      - "{{Hostname}}"
+    port: 445
+
+    matchers-condition: and
+    matchers:
+      - type: binary
+        binary:
+          - "ff534d42"  # SMB header magic bytes
+        part: body
+
+      - type: binary
+        binary:
+          - "72"  # Negotiate Protocol response
+        part: body
+        offset: 4
+
+    extractors:
+      - type: dsl
+        dsl:
+          - '"SMBv1 is enabled on " + Host'

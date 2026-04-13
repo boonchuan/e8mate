@@ -1,0 +1,56 @@
+id: e8-missing-security-headers
+
+info:
+  name: Essential Eight - Missing Security Headers
+  author: e8mate
+  severity: medium
+  description: |
+    Checks internet-facing web services for missing security headers.
+    Per Essential Eight user application hardening, web-facing services
+    should implement security headers to reduce attack surface.
+  tags: essential-eight,e8,user-application-hardening,headers,australia,compliance
+  reference:
+    - https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model
+  metadata:
+    e8-control: user_application_hardening
+    e8-maturity-level: 1
+    max-request: 1
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    host-redirects: true
+    max-redirects: 3
+
+    matchers-condition: or
+    matchers:
+      - type: dsl
+        name: missing-hsts
+        dsl:
+          - "!regex('(?i)strict-transport-security', header)"
+        condition: and
+
+      - type: dsl
+        name: missing-csp
+        dsl:
+          - "!regex('(?i)content-security-policy', header)"
+        condition: and
+
+      - type: dsl
+        name: missing-x-content-type
+        dsl:
+          - "!regex('(?i)x-content-type-options', header)"
+        condition: and
+
+      - type: dsl
+        name: missing-x-frame
+        dsl:
+          - "!regex('(?i)x-frame-options', header)"
+        condition: and
+
+    extractors:
+      - type: dsl
+        dsl:
+          - '"Security headers check on " + host'
