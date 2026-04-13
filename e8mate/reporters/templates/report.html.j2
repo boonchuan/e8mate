@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Essential Eight Assessment — {{ system_info.hostname }} — {{ scan_date }}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0b0f19;
+    --bg-card: #111827;
+    --bg-card-alt: #1a2233;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-heading: #f1f5f9;
+    --accent: #00d4aa;
+    --accent-dim: rgba(0,212,170,0.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,0.12);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.12);
+    --blue: #3b82f6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .report { max-width: 1100px; margin: 0 auto; padding: 40px 32px; }
+
+  /* ── Header ── */
+  .report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 32px;
+    margin-bottom: 40px;
+  }
+  .report-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-heading);
+    letter-spacing: -0.5px;
+  }
+  .report-header h1 span { color: var(--accent); }
+  .report-header .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .report-meta {
+    text-align: right;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .report-meta strong { color: var(--text); }
+
+  /* ── Overall Score ── */
+  .overall-score {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .overall-score .label {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .overall-score .level {
+    font-size: 72px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .overall-score .level-text {
+    font-size: 18px;
+    color: var(--text-dim);
+  }
+  .ml-0 { color: var(--red); }
+  .ml-1 { color: var(--amber); }
+  .ml-2 { color: var(--blue); }
+  .ml-3 { color: var(--green); }
+
+  /* ── System Info ── */
+  .sys-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .sys-info-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .sys-info-item .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .sys-info-item .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--text-heading);
+  }
+
+  /* ── Section Headers ── */
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-heading);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-title span { color: var(--accent); }
+
+  /* ── Maturity Heatmap ── */
+  .heatmap {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  .heatmap-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .heatmap-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+  }
+  .heatmap-card.pass::before { background: var(--green); }
+  .heatmap-card.fail::before { background: var(--red); }
+  .heatmap-card.partial::before { background: var(--amber); }
+  .heatmap-card .h-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .heatmap-card .h-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .heatmap-card .h-rate {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* ── Control Detail Cards ── */
+  .control-section { margin-bottom: 32px; }
+  .control-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px 8px 0 0;
+    padding: 16px 20px;
+  }
+  .control-header h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-heading);
+  }
+  .control-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 4px;
+  }
+  .badge-pass { background: var(--green-dim); color: var(--green); }
+  .badge-fail { background: var(--red-dim); color: var(--red); }
+  .badge-partial { background: var(--amber-dim); color: var(--amber); }
+
+  .findings-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+  }
+  .findings-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    padding: 10px 16px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+  }
+  .findings-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  .findings-table tr:last-child td { border-bottom: none; }
+  .findings-table .check-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .findings-table .outcome-icon { font-size: 16px; text-align: center; }
+  .findings-table .remediation {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border);
+    line-height: 1.5;
+  }
+
+  /* ── Remediation Roadmap ── */
+  .roadmap-list { margin-bottom: 40px; }
+  .roadmap-item {
+    display: flex;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    align-items: flex-start;
+  }
+  .roadmap-item .priority {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .priority-critical { background: var(--red-dim); color: var(--red); }
+  .priority-high { background: var(--amber-dim); color: var(--amber); }
+  .priority-medium { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .roadmap-item .rm-control {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 160px;
+  }
+  .roadmap-item .rm-text { font-size: 13px; }
+
+  /* ── Footer ── */
+  .report-footer {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    margin-top: 48px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .report-footer a { color: var(--accent); text-decoration: none; }
+
+  /* ── Print Styles ── */
+  @media print {
+    :root {
+      --bg: #fff;
+      --bg-card: #f8fafc;
+      --bg-card-alt: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-dim: #64748b;
+      --text-heading: #0f172a;
+    }
+    body { font-size: 11px; }
+    .report { padding: 0; }
+    .overall-score .level { font-size: 48px; }
+    .heatmap { grid-template-columns: repeat(4, 1fr); }
+    .control-section { page-break-inside: avoid; }
+    .report-footer { margin-top: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="report">
+
+  <!-- Header -->
+  <div class="report-header">
+    <div>
+      <h1><span>Essential Eight</span> Assessment Report</h1>
+      <div class="subtitle">ASD Essential Eight Maturity Model — Maturity Level {{ target_maturity }} Assessment</div>
+    </div>
+    <div class="report-meta">
+      <div><strong>{{ scan_date }}</strong></div>
+      <div>Scan ID: {{ scan_id }}</div>
+      <div>E8Mate v{{ scanner_version }}</div>
+    </div>
+  </div>
+
+  <!-- System Info -->
+  <div class="sys-info">
+    <div class="sys-info-item">
+      <div class="label">Hostname</div>
+      <div class="value">{{ system_info.hostname }}</div>
+    </div>
+    <div class="sys-info-item">
+      <div class="label">Operating System</div>
+      <div class="value">{{ system_info.os_name }}</div>
+    </div>
+    <div class="sys-info-item">
+      <div class="label">OS Version</div>
+      <div class="value">{{ system_info.os_version }}</div>
+    </div>
+    <div class="sys-info-item">
+      <div class="label">Scan Duration</div>
+      <div class="value">{{ scan_duration }}s</div>
+    </div>
+  </div>
+
+  <!-- Overall Score -->
+  <div class="overall-score">
+    <div class="label">Overall Essential Eight Maturity</div>
+    <div class="level ml-{{ overall_maturity }}">ML{{ overall_maturity }}</div>
+    <div class="level-text">
+      {% if overall_maturity == 0 %}Maturity Level 0 — Significant gaps in cybersecurity baseline
+      {% elif overall_maturity == 1 %}Maturity Level 1 — Baseline protection against commodity threats
+      {% elif overall_maturity == 2 %}Maturity Level 2 — Protection against more capable adversaries
+      {% elif overall_maturity == 3 %}Maturity Level 3 — Protection against advanced persistent threats
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Maturity Heatmap -->
+  <h2 class="section-title"><span>#</span> Control Overview</h2>
+  <div class="heatmap">
+    {% for cr in control_results %}
+    <div class="heatmap-card {{ 'pass' if cr.achieved_maturity >= cr.target_maturity else ('partial' if cr.achieved_maturity > 0 else 'fail') }}">
+      <div class="h-name">{{ cr.display_name }}</div>
+      <div class="h-score ml-{{ cr.achieved_maturity }}">ML{{ cr.achieved_maturity }}</div>
+      <div class="h-rate">{{ cr.effective_checks }}/{{ cr.total_checks }} checks passed</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Executive Summary -->
+  <h2 class="section-title"><span>#</span> Executive Summary</h2>
+  <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 24px; margin-bottom: 40px; line-height: 1.8;">
+    <p>This assessment evaluated <strong>{{ system_info.hostname }}</strong> against the Australian Signals Directorate's Essential Eight Maturity Model at <strong>Maturity Level {{ target_maturity }}</strong>.</p>
+    <br>
+    <p>The system achieved an overall maturity of <strong class="ml-{{ overall_maturity }}">Maturity Level {{ overall_maturity }}</strong> based on {{ total_checks }} checks across all 8 controls. A total of <strong>{{ effective_checks }} checks passed</strong> ({{ pass_rate }}%), with <strong>{{ ineffective_checks }} requiring remediation</strong>.</p>
+    <br>
+    <p>
+      {% set passed_controls = control_results | selectattr('achieved_maturity', 'ge', 1) | list %}
+      {% set failed_controls = control_results | rejectattr('achieved_maturity', 'ge', 1) | list %}
+      {% if passed_controls | length == 8 %}All 8 controls meet the target maturity level.
+      {% elif failed_controls | length == 8 %}No controls currently meet the target maturity level. Immediate action is recommended.
+      {% else %}{{ passed_controls | length }} of 8 controls meet the target maturity level. Priority remediation is recommended for: {{ failed_controls | map(attribute='display_name') | join(', ') }}.
+      {% endif %}
+    </p>
+    <br>
+    <p style="font-size: 12px; color: var(--text-dim);"><em>Note: This is an automated assessment. Only ASD-approved assessors can formally certify Essential Eight maturity levels. This report supports compliance preparation and internal tracking.</em></p>
+  </div>
+
+  <!-- Per-Control Details -->
+  <h2 class="section-title"><span>#</span> Detailed Findings</h2>
+  {% for cr in control_results %}
+  <div class="control-section">
+    <div class="control-header">
+      <h3>{{ loop.index }}. {{ cr.display_name }}</h3>
+      <span class="control-badge {{ 'badge-pass' if cr.achieved_maturity >= cr.target_maturity else ('badge-partial' if cr.achieved_maturity > 0 else 'badge-fail') }}">
+        ML{{ cr.achieved_maturity }} {% if cr.achieved_maturity >= cr.target_maturity %}PASS{% else %}FAIL{% endif %}
+      </span>
+    </div>
+    <table class="findings-table">
+      <thead>
+        <tr>
+          <th style="width:90px;">Check</th>
+          <th style="width:40px;"></th>
+          <th>Finding</th>
+          <th style="width:80px;">Severity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in cr.findings %}
+        <tr>
+          <td class="check-id">{{ f.check_id }}</td>
+          <td class="outcome-icon">
+            {% if f.outcome == 'effective' %}✅
+            {% elif f.outcome == 'alternate_control' %}🔄
+            {% elif f.outcome == 'ineffective' %}❌
+            {% elif f.outcome == 'not_implemented' %}⬜
+            {% elif f.outcome == 'no_visibility' %}👁
+            {% elif f.outcome == 'not_applicable' %}—
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <strong>{{ f.title }}</strong><br>
+            <span style="color: var(--text-dim);">{{ f.description }}</span>
+            {% if f.outcome == 'ineffective' and f.remediation %}
+            <div class="remediation">→ {{ f.remediation }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="priority priority-{{ f.severity }}">{{ f.severity | upper }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <!-- Remediation Roadmap -->
+  {% if remediation_items %}
+  <h2 class="section-title"><span>#</span> Remediation Roadmap</h2>
+  <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 13px;">
+    Prioritised list of actions to achieve Maturity Level {{ target_maturity }}. Address critical items first.
+  </p>
+  <div class="roadmap-list">
+    {% for item in remediation_items %}
+    <div class="roadmap-item">
+      <span class="priority priority-{{ item.severity }}">{{ item.severity | upper }}</span>
+      <span class="rm-control">{{ item.control }}</span>
+      <span class="rm-text"><strong>{{ item.title }}</strong> — {{ item.remediation }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="report-footer">
+    <p>Generated by <a href="https://security8.work">E8Mate</a> v{{ scanner_version }} — Open Source Essential Eight Compliance Scanner</p>
+    <p style="margin-top: 4px;">This report is for internal use only. Not a substitute for formal ASD-approved assessment.</p>
+    <p style="margin-top: 4px;">{{ scan_date }} | Scan ID: {{ scan_id }}</p>
+  </div>
+
+</div>
+</body>
+</html>

@@ -191,21 +191,39 @@ def scan(
     _display_summary(result)
 
     # Save report
-    if format == "json":
-        from pathlib import Path
-        from e8mate.reporters.json_reporter import generate_json_report
-        from e8mate.utils.security import set_report_permissions, validate_output_path
+    from pathlib import Path
+    from e8mate.utils.security import set_report_permissions, validate_output_path
 
+    if format == "json":
+        from e8mate.reporters.json_reporter import generate_json_report
         out_path = output or f"e8mate-scan-{result.scan_id}.json"
         try:
             safe_path = validate_output_path(out_path)
         except ValueError as e:
             console.print(f"[red]Invalid output path: {e}[/red]")
             raise typer.Exit(1)
-
         report_path = generate_json_report(result, safe_path)
         set_report_permissions(report_path)
-        console.print(f"\n[green]📄 Report saved to:[/green] {report_path} [dim](permissions: owner-only)[/dim]")
+        console.print(f"\n[green]📄 JSON report saved to:[/green] {report_path} [dim](owner-only)[/dim]")
+
+    elif format == "html":
+        from e8mate.reporters.html_reporter import generate_html_report
+        out_path = output or f"e8mate-report-{result.scan_id}.html"
+        try:
+            safe_path = validate_output_path(out_path)
+        except ValueError as e:
+            console.print(f"[red]Invalid output path: {e}[/red]")
+            raise typer.Exit(1)
+        report_path = generate_html_report(result, safe_path)
+        set_report_permissions(report_path)
+        console.print(f"\n[green]📄 HTML report saved to:[/green] {report_path} [dim](owner-only)[/dim]")
+
+    # Always save JSON alongside for data portability
+    if format != "json":
+        from e8mate.reporters.json_reporter import generate_json_report
+        json_path = validate_output_path(f"e8mate-scan-{result.scan_id}.json")
+        generate_json_report(result, json_path)
+        set_report_permissions(json_path)
 
     console.print()
 
