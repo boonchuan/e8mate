@@ -289,7 +289,7 @@ def _display_summary(result):
 
         table.add_row(cr.display_name, achieved_str, f"ML{target}", pass_rate, status)
 
-    # Add rows for controls not yet implemented
+    # Add rows for controls not included in this scan
     all_controls = {
         "Application Control", "Patch Applications", "Configure Microsoft Office Macros",
         "User Application Hardening", "Restrict Administrative Privileges",
@@ -302,7 +302,7 @@ def _display_summary(result):
             "[dim]—[/dim]",
             "[dim]ML1[/dim]",
             "[dim]—[/dim]",
-            "[dim]🔜 Coming[/dim]",
+            "[dim]⊘ Not scanned[/dim]",
         )
 
     console.print(table)

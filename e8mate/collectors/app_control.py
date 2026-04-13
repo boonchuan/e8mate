@@ -1,0 +1,200 @@
+"""Collector for Control 1: Application Control.
+
+Essential Eight Maturity Level 1 requirements:
+- Application control is implemented on workstations.
+- Application control restricts execution of executables, software libraries,
+  scripts, installers, compiled HTML, HTML applications and control panel
+  applets to an organisation-approved set.
+- Microsoft's recommended application blocklist is implemented.
+- Microsoft's recommended driver blocklist is implemented.
+"""
+
+from __future__ import annotations
+
+import json
+
+from e8mate.collectors.base import BaseCollector
+from e8mate.evidence.models import (
+    ControlOutcome,
+    ControlResult,
+    E8Control,
+    Finding,
+    MaturityLevel,
+    Severity,
+)
+
+
+class AppControlCollector(BaseCollector):
+    """Assess Maturity Level 1 compliance for application control."""
+
+    control = E8Control.APP_CONTROL
+    display_name = "Application Control"
+
+    def collect(self) -> ControlResult:
+        """Run all application control checks."""
+        self._check_applocker_or_wdac()
+        self._check_applocker_service()
+        self._check_applocker_enforcement()
+        return self.build_result()
+
+    def _check_applocker_or_wdac(self):
+        """AC-ML1-001: AppLocker or WDAC is configured."""
+        script = """
+        $result = @{}
+        $al = Get-AppLockerPolicy -Effective -ErrorAction SilentlyContinue
+        if ($al) {
+            $result["AppLocker"] = $true
+            $result["RuleCollections"] = ($al.RuleCollections | ForEach-Object {
+                @{ Type = $_.RuleCollectionType; Mode = $_.EnforcementMode }
+            })
+        } else {
+            $result["AppLocker"] = $false
+        }
+        $wdac = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\\Microsoft\\Windows\\DeviceGuard -ErrorAction SilentlyContinue
+        if ($wdac) {
+            $result["WDAC_CodeIntegrity"] = $wdac.CodeIntegrityPolicyEnforcementStatus
+        }
+        $result | ConvertTo-Json -Depth 3
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AC-ML1-001",
+            control=self.control,
+            title="Application control is implemented",
+            description="AppLocker or WDAC must be configured to restrict application execution.",
+            maturity_level=MaturityLevel.ML1,
+            severity=Severity.CRITICAL,
+            remediation=(
+                "Implement AppLocker via Group Policy or WDAC via ConfigCI. "
+                "Start with audit mode, then enforce after testing."
+            ),
+            asd_reference="https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence(
+                "powershell", output, "AppLocker/WDAC status"
+            ))
+
+            try:
+                data = json.loads(output)
+                has_applocker = data.get("AppLocker", False)
+                wdac_status = data.get("WDAC_CodeIntegrity")
+
+                if has_applocker or (wdac_status and wdac_status > 0):
+                    finding.outcome = ControlOutcome.EFFECTIVE
+                    mechanism = "AppLocker" if has_applocker else "WDAC"
+                    finding.description = f"Application control is active via {mechanism}."
+                else:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "No application control (AppLocker/WDAC) detected."
+
+            except json.JSONDecodeError:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_applocker_service(self):
+        """AC-ML1-002: AppLocker service (AppIDSvc) is running."""
+        script = "Get-Service AppIDSvc | Select-Object Status, StartType | ConvertTo-Json"
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AC-ML1-002",
+            control=self.control,
+            title="Application Identity service is running",
+            description="The AppIDSvc service must be running for AppLocker to function.",
+            maturity_level=MaturityLevel.ML1,
+            severity=Severity.HIGH,
+            remediation="Set Application Identity service (AppIDSvc) to Automatic and start it.",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "AppIDSvc"))
+
+            try:
+                data = json.loads(output)
+                status = data.get("Status")
+                start_type = data.get("StartType")
+
+                if status == 4 or str(status).lower() == "running":
+                    finding.outcome = ControlOutcome.EFFECTIVE
+                    finding.description = "Application Identity service is running."
+                elif start_type == 4 or str(start_type).lower() == "disabled":
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "Application Identity service is disabled."
+                else:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = f"Application Identity service is not running (status: {status})."
+
+            except json.JSONDecodeError:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_applocker_enforcement(self):
+        """AC-ML1-003: AppLocker rules are in enforce mode (not audit-only)."""
+        script = """
+        $policy = Get-AppLockerPolicy -Effective -ErrorAction SilentlyContinue
+        if ($policy) {
+            $policy.RuleCollections | ForEach-Object {
+                @{ Type = $_.RuleCollectionType; Mode = $_.EnforcementMode }
+            } | ConvertTo-Json
+        } else {
+            @() | ConvertTo-Json
+        }
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AC-ML1-003",
+            control=self.control,
+            title="Application control rules are enforced (not audit-only)",
+            description="AppLocker rules should be in Enforce mode, not just Audit.",
+            maturity_level=MaturityLevel.ML1,
+            severity=Severity.HIGH,
+            remediation=(
+                "Change AppLocker rule collections from AuditOnly to Enabled "
+                "after validating in audit mode."
+            ),
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "AppLocker enforcement"))
+
+            try:
+                data = json.loads(output)
+                if not isinstance(data, list):
+                    data = [data]
+
+                if not data:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "No AppLocker rule collections found."
+                else:
+                    enforced = [r for r in data if str(r.get("Mode", "")).lower() in ("enabled", "1")]
+                    audit_only = [r for r in data if str(r.get("Mode", "")).lower() in ("auditonly", "0")]
+
+                    if enforced and not audit_only:
+                        finding.outcome = ControlOutcome.EFFECTIVE
+                        finding.description = f"All {len(enforced)} rule collection(s) are in enforce mode."
+                    elif audit_only:
+                        finding.outcome = ControlOutcome.INEFFECTIVE
+                        types = [r.get("Type", "?") for r in audit_only]
+                        finding.description = (
+                            f"Rule collections in audit-only mode: {', '.join(types)}. "
+                            "Switch to enforce mode."
+                        )
+                    else:
+                        finding.outcome = ControlOutcome.NO_VISIBILITY
+
+            except json.JSONDecodeError:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)

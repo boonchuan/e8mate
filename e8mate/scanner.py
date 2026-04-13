@@ -16,15 +16,14 @@ from e8mate.scoring.maturity import calculate_overall_maturity
 
 # Registry of available collectors
 COLLECTOR_REGISTRY = {
+    E8Control.APP_CONTROL: "e8mate.collectors.app_control.AppControlCollector",
+    E8Control.PATCH_APPS: "e8mate.collectors.patch_apps.PatchAppsCollector",
+    E8Control.MACRO_SETTINGS: "e8mate.collectors.macro_settings.MacroSettingsCollector",
+    E8Control.APP_HARDENING: "e8mate.collectors.app_hardening.AppHardeningCollector",
+    E8Control.ADMIN_PRIVILEGES: "e8mate.collectors.admin_privs.AdminPrivsCollector",
     E8Control.PATCH_OS: "e8mate.collectors.patch_os.PatchOSCollector",
-    # Add more as they're built:
-    # E8Control.PATCH_APPS: "e8mate.collectors.patch_apps.PatchAppsCollector",
-    # E8Control.MACRO_SETTINGS: "e8mate.collectors.macro_settings.MacroSettingsCollector",
-    # E8Control.APP_HARDENING: "e8mate.collectors.app_hardening.AppHardeningCollector",
-    # E8Control.ADMIN_PRIVILEGES: "e8mate.collectors.admin_privs.AdminPrivsCollector",
-    # E8Control.APP_CONTROL: "e8mate.collectors.app_control.AppControlCollector",
-    # E8Control.MFA: "e8mate.collectors.mfa.MFACollector",
-    # E8Control.BACKUPS: "e8mate.collectors.backups.BackupsCollector",
+    E8Control.MFA: "e8mate.collectors.mfa.MFACollector",
+    E8Control.BACKUPS: "e8mate.collectors.backups.BackupsCollector",
 }
 
 

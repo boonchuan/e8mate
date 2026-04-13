@@ -41,10 +41,10 @@ class MockTransport:
         """Return mock PowerShell output based on the script content."""
         script_lower = script.lower()
 
-        # Match script content to mock responses
-        for keyword, response in self._responses.items():
+        # Match against longest keywords first (most specific match wins)
+        for keyword in sorted(self._responses.keys(), key=len, reverse=True):
             if keyword in script_lower:
-                return response
+                return self._responses[keyword]
 
         return json.dumps({"mock": True, "note": "No mock data for this command"})
 
@@ -95,7 +95,60 @@ class MockTransport:
         recent_date = (now - timedelta(days=5)).strftime("/Date(%d)/" % int((now - timedelta(days=5)).timestamp() * 1000))
 
         return {
-            # Patch OS checks
+            # --- Control 1: Application Control ---
+            # AC-ML1-001: combined check (script has $result["applocker"])
+            'result["applocker"]': json.dumps({
+                "AppLocker": True,
+                "RuleCollections": [
+                    {"Type": "Exe", "Mode": "Enabled"},
+                    {"Type": "Script", "Mode": "Enabled"},
+                ],
+                "WDAC_CodeIntegrity": 2,
+            }),
+            # AC-ML1-002: service check
+            "appidsvc": json.dumps({"Status": 4, "StartType": 2}),
+            # AC-ML1-003: enforcement check (script has rulecollectiontype)
+            "rulecollectiontype": json.dumps([
+                {"Type": "Exe", "Mode": "Enabled"},
+                {"Type": "Script", "Mode": "Enabled"},
+            ]),
+
+            # --- Control 2: Patch Applications ---
+            "currentversion\\uninstall": json.dumps([
+                {"DisplayName": "Google Chrome", "DisplayVersion": "124.0.6367.91", "Publisher": "Google LLC", "InstallDate": "20260401"},
+                {"DisplayName": "Microsoft Edge", "DisplayVersion": "124.0.2478.51", "Publisher": "Microsoft", "InstallDate": "20260405"},
+                {"DisplayName": "7-Zip", "DisplayVersion": "24.08", "Publisher": "Igor Pavlov", "InstallDate": "20260101"},
+            ]),
+            "chrome.exe": json.dumps({"Chrome": "124.0.6367.91"}),
+            "msedge.exe": json.dumps({"Edge": "124.0.2478.51"}),
+            "clicktorun": json.dumps({
+                "VersionToReport": "16.0.17531.20140",
+                "UpdatesEnabled": "True",
+                "Platform": "x64",
+            }),
+
+            # --- Control 3: Macro Settings ---
+            "vbawarnings": json.dumps({"VBAWarnings": 4, "Word": 4, "Excel": 4, "PowerPoint": 4}),
+            "blockcontentexecutionfrominternet": json.dumps({"blockcontentexecutionfrominternet": 1, "Word": 1, "Excel": 1, "PowerPoint": 1}),
+            "macroruntimescanscope": json.dumps({"MacroRuntimeScanScope": 2}),
+
+            # --- Control 4: User Application Hardening ---
+            "internet-explorer-optional": json.dumps({"PolicySet": True, "FeatureState": "DisabledWithPayloadRemoved"}),
+            "scriptblocklogging": json.dumps({"EnableScriptBlockLogging": 1}),
+            "languagemode": "ConstrainedLanguage",
+            "netfx3": json.dumps({"State": "Disabled"}),
+
+            # --- Control 5: Admin Privileges ---
+            "get-localgroupmember": json.dumps([
+                {"Name": "DESKTOP-E8MATE01\\Admin", "SID": "S-1-5-21-xxx-500", "ObjectClass": "User"},
+            ]),
+            "domain admins": json.dumps([
+                {"Name": "svc-admin", "SamAccountName": "svc-admin"},
+            ]),
+            "get-localuser": json.dumps({"Name": "Administrator", "Enabled": False, "SID": "S-1-5-21-xxx-500"}),
+            "search-adaccount": json.dumps([]),
+
+            # --- Control 6: Patch Operating Systems ---
             "win32_operatingsystem": json.dumps({
                 "Caption": "Microsoft Windows 11 Pro",
                 "Version": "10.0.22631",
@@ -111,41 +164,33 @@ class MockTransport:
                 {"HotFixID": "KB5034441", "InstalledOn": recent_date, "Description": "Security Update"},
             ]),
             "windowsupdate\\au": json.dumps({
-                "AUOptions": 4,
-                "NoAutoUpdate": 0,
-                "UseWUServer": 0,
-                "PolicyConfigured": True,
+                "AUOptions": 4, "NoAutoUpdate": 0, "UseWUServer": 0, "PolicyConfigured": True,
             }),
-            "wuauserv": json.dumps({
-                "Status": 4, "StartType": 2, "DisplayName": "Windows Update",
+            "wuauserv": json.dumps({"Status": 4, "StartType": 2, "DisplayName": "Windows Update"}),
+
+            # --- Control 7: MFA ---
+            "rdp-tcp": json.dumps({"UserAuthentication": 1, "SecurityLayer": 2, "fDenyTSConnections": 0}),
+            "wsman": json.dumps({"Basic": "false", "Kerberos": "true", "Negotiate": "true"}),
+            "win32_deviceguard": json.dumps({
+                "SecurityServicesRunning": [1, 2],
+                "VirtualizationBasedSecurityStatus": 2,
+                "not_supported": False,
             }),
-            # Admin privileges
-            "get-localgroupmember": json.dumps([
-                {"Name": "DESKTOP-E8MATE01\\Admin", "SID": "S-1-5-21-xxx-500", "ObjectClass": "User"},
-            ]),
-            "domain admins": json.dumps([
-                {"Name": "svc-admin", "SamAccountName": "svc-admin"},
-            ]),
-            # Macro settings
-            "vbawarnings": json.dumps({"VBAWarnings": 4}),  # All macros disabled
-            "blockcontentexecutionfrominternet": json.dumps({"blockcontentexecutionfrominternet": 1}),
-            # AppLocker
-            "applockerpolicy": json.dumps({
-                "RuleCollections": [
-                    {"RuleCollectionType": "Exe", "EnforcementMode": "Enabled"},
-                    {"RuleCollectionType": "Script", "EnforcementMode": "Enabled"},
-                ],
+
+            # --- Control 8: Backups ---
+            "vss": json.dumps({"Status": 4, "StartType": 3, "DisplayName": "Volume Shadow Copy"}),
+            # BK-ML1-002: combined check (script has $wbresult)
+            "$wbresult": json.dumps({
+                "WindowsBackup": {
+                    "LastSuccess": now.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "Versions": 14,
+                },
+                "VSShadows": True,
             }),
-            "appidsvc": json.dumps({"Status": 4, "StartType": 2}),
-            # Application hardening
-            "scriptblocklogging": json.dumps({"EnableScriptBlockLogging": 1}),
-            "languagemode": "ConstrainedLanguage",
-            # Backups
-            "vss": json.dumps({"Status": 4}),
-            "vssadmin": "Contents of shadow copy set...\nShadow copy created: " + now.strftime("%Y-%m-%d"),
-            "get-wbsummary": json.dumps({
-                "LastSuccessfulBackupTime": now.strftime("%Y-%m-%dT%H:%M:%S"),
-                "NumberOfVersions": 14,
+            # BK-ML1-003: recency check (script has lastbackuptime)
+            "lastbackuptime": json.dumps({
+                "LastSuccess": now.strftime("%Y-%m-%dT%H:%M:%S"),
+                "LastAttempt": now.strftime("%Y-%m-%dT%H:%M:%S"),
             }),
         }
 
@@ -154,6 +199,49 @@ class MockTransport:
         old_date = (now - timedelta(days=120)).strftime("/Date(%d)/" % int((now - timedelta(days=120)).timestamp() * 1000))
 
         return {
+            # --- Control 1: Application Control ---
+            'result["applocker"]': json.dumps({
+                "AppLocker": False,
+                "RuleCollections": [],
+                "WDAC_CodeIntegrity": 0,
+            }),
+            "appidsvc": json.dumps({"Status": 1, "StartType": 4}),
+            "rulecollectiontype": json.dumps([]),
+
+            # --- Control 2: Patch Applications ---
+            "currentversion\\uninstall": json.dumps([
+                {"DisplayName": "Google Chrome", "DisplayVersion": "109.0.5414.120", "Publisher": "Google LLC"},
+                {"DisplayName": "Adobe Flash Player", "DisplayVersion": "32.0.0.465", "Publisher": "Adobe"},
+                {"DisplayName": "Java 7 Update 80", "DisplayVersion": "7.0.800", "Publisher": "Oracle"},
+            ]),
+            "chrome.exe": json.dumps({"Chrome": "109.0.5414.120"}),
+            "clicktorun": json.dumps({"not_installed": True}),
+
+            # --- Control 3: Macro Settings ---
+            "vbawarnings": json.dumps({"VBAWarnings": 1, "Word": 1, "Excel": 1, "PowerPoint": 1}),
+            "blockcontentexecutionfrominternet": json.dumps({}),
+            "macroruntimescanscope": json.dumps({"MacroRuntimeScanScope": 0}),
+
+            # --- Control 4: User Application Hardening ---
+            "internet-explorer-optional": json.dumps({"PolicySet": False, "FeatureState": "Enabled"}),
+            "scriptblocklogging": "[ERROR] Property not found",
+            "languagemode": "FullLanguage",
+            "netfx3": json.dumps({"State": "Enabled"}),
+
+            # --- Control 5: Admin Privileges ---
+            "get-localgroupmember": json.dumps([
+                {"Name": "OLDPC\\Administrator", "SID": "S-1-5-21-xxx-500", "ObjectClass": "User"},
+                {"Name": "OLDPC\\john", "SID": "S-1-5-21-xxx-1001", "ObjectClass": "User"},
+                {"Name": "OLDPC\\reception", "SID": "S-1-5-21-xxx-1002", "ObjectClass": "User"},
+                {"Name": "OLDPC\\temp-contractor", "SID": "S-1-5-21-xxx-1003", "ObjectClass": "User"},
+                {"Name": "OLDPC\\backup-svc", "SID": "S-1-5-21-xxx-1004", "ObjectClass": "User"},
+                {"Name": "OLDPC\\dev-test", "SID": "S-1-5-21-xxx-1005", "ObjectClass": "User"},
+            ]),
+            "domain admins": json.dumps({"not_domain_joined": True}),
+            "get-localuser": json.dumps({"Name": "Administrator", "Enabled": True, "SID": "S-1-5-21-xxx-500"}),
+            "search-adaccount": json.dumps({"not_domain_joined": True}),
+
+            # --- Control 6: Patch Operating Systems ---
             "win32_operatingsystem": json.dumps({
                 "Caption": "Microsoft Windows 10 Pro",
                 "Version": "10.0.19041",
@@ -168,28 +256,26 @@ class MockTransport:
                 {"HotFixID": "KB5001330", "InstalledOn": old_date, "Description": "Security Update"},
             ]),
             "windowsupdate\\au": json.dumps({
-                "AUOptions": 1,
-                "NoAutoUpdate": 1,
-                "UseWUServer": 0,
-                "PolicyConfigured": True,
+                "AUOptions": 1, "NoAutoUpdate": 1, "UseWUServer": 0, "PolicyConfigured": True,
             }),
-            "wuauserv": json.dumps({
-                "Status": 1, "StartType": 4, "DisplayName": "Windows Update",
+            "wuauserv": json.dumps({"Status": 1, "StartType": 4, "DisplayName": "Windows Update"}),
+
+            # --- Control 7: MFA ---
+            "rdp-tcp": json.dumps({"UserAuthentication": 0, "SecurityLayer": 0, "fDenyTSConnections": 0}),
+            "wsman": json.dumps({"Basic": "true", "Kerberos": "false", "Negotiate": "true"}),
+            "win32_deviceguard": json.dumps({
+                "SecurityServicesRunning": [],
+                "VirtualizationBasedSecurityStatus": 0,
+                "not_supported": False,
             }),
-            "get-localgroupmember": json.dumps([
-                {"Name": "OLDPC\\Administrator", "SID": "S-1-5-21-xxx-500", "ObjectClass": "User"},
-                {"Name": "OLDPC\\john", "SID": "S-1-5-21-xxx-1001", "ObjectClass": "User"},
-                {"Name": "OLDPC\\reception", "SID": "S-1-5-21-xxx-1002", "ObjectClass": "User"},
-            ]),
-            "vbawarnings": json.dumps({"VBAWarnings": 1}),  # All macros enabled
-            "blockcontentexecutionfrominternet": json.dumps({}),
-            "applockerpolicy": json.dumps({"RuleCollections": []}),
-            "appidsvc": json.dumps({"Status": 1, "StartType": 4}),
-            "scriptblocklogging": "[ERROR] Property not found",
-            "languagemode": "FullLanguage",
-            "vss": json.dumps({"Status": 1}),
-            "vssadmin": "No shadow copies found.",
-            "get-wbsummary": "[ERROR] Feature not installed",
+
+            # --- Control 8: Backups ---
+            "vss": json.dumps({"Status": 1, "StartType": 4, "DisplayName": "Volume Shadow Copy"}),
+            "$wbresult": json.dumps({
+                "WindowsBackup": None,
+                "VSShadows": False,
+            }),
+            "lastbackuptime": json.dumps({"not_available": True}),
         }
 
     def _partial_responses(self, now: datetime) -> dict:
@@ -197,6 +283,53 @@ class MockTransport:
         somewhat_old = (now - timedelta(days=40)).strftime("/Date(%d)/" % int((now - timedelta(days=40)).timestamp() * 1000))
 
         return {
+            # --- Control 1: Application Control (audit only) ---
+            'result["applocker"]': json.dumps({
+                "AppLocker": True,
+                "RuleCollections": [
+                    {"Type": "Exe", "Mode": "AuditOnly"},
+                ],
+                "WDAC_CodeIntegrity": 0,
+            }),
+            "appidsvc": json.dumps({"Status": 4, "StartType": 3}),
+            "rulecollectiontype": json.dumps([
+                {"Type": "Exe", "Mode": "AuditOnly"},
+            ]),
+
+            # --- Control 2: Patch Applications ---
+            "currentversion\\uninstall": json.dumps([
+                {"DisplayName": "Google Chrome", "DisplayVersion": "123.0.6312.86", "Publisher": "Google LLC"},
+                {"DisplayName": "Microsoft Edge", "DisplayVersion": "123.0.2420.65", "Publisher": "Microsoft"},
+                {"DisplayName": "Notepad++", "DisplayVersion": "8.6.4", "Publisher": "Notepad++ Team"},
+            ]),
+            "chrome.exe": json.dumps({"Chrome": "123.0.6312.86"}),
+            "clicktorun": json.dumps({
+                "VersionToReport": "16.0.17328.20162",
+                "UpdatesEnabled": "True",
+                "Platform": "x64",
+            }),
+
+            # --- Control 3: Macro Settings (signed only, not fully disabled) ---
+            "vbawarnings": json.dumps({"VBAWarnings": 3, "Word": 3, "Excel": 3, "PowerPoint": 3}),
+            "blockcontentexecutionfrominternet": json.dumps({"blockcontentexecutionfrominternet": 1, "Word": 1, "Excel": 1, "PowerPoint": 1}),
+            "macroruntimescanscope": json.dumps({"MacroRuntimeScanScope": None}),
+
+            # --- Control 4: User Application Hardening ---
+            "internet-explorer-optional": json.dumps({"PolicySet": True, "FeatureState": "Disabled"}),
+            "scriptblocklogging": json.dumps({"EnableScriptBlockLogging": 1}),
+            "languagemode": "FullLanguage",
+            "netfx3": json.dumps({"State": "Enabled"}),
+
+            # --- Control 5: Admin Privileges ---
+            "get-localgroupmember": json.dumps([
+                {"Name": "WS-REC\\Admin", "SID": "S-1-5-21-xxx-500", "ObjectClass": "User"},
+                {"Name": "WS-REC\\helpdesk", "SID": "S-1-5-21-xxx-1001", "ObjectClass": "User"},
+            ]),
+            "domain admins": json.dumps({"not_domain_joined": True}),
+            "get-localuser": json.dumps({"Name": "Administrator", "Enabled": True, "SID": "S-1-5-21-xxx-500"}),
+            "search-adaccount": json.dumps({"not_domain_joined": True}),
+
+            # --- Control 6: Patch Operating Systems ---
             "win32_operatingsystem": json.dumps({
                 "Caption": "Microsoft Windows 10 Pro",
                 "Version": "10.0.19045",
@@ -212,32 +345,30 @@ class MockTransport:
                 {"HotFixID": "KB5034122", "InstalledOn": somewhat_old, "Description": "Update"},
             ]),
             "windowsupdate\\au": json.dumps({
-                "AUOptions": 3,
-                "NoAutoUpdate": 0,
-                "UseWUServer": 1,
-                "PolicyConfigured": True,
+                "AUOptions": 3, "NoAutoUpdate": 0, "UseWUServer": 1, "PolicyConfigured": True,
             }),
-            "wuauserv": json.dumps({
-                "Status": 4, "StartType": 2, "DisplayName": "Windows Update",
+            "wuauserv": json.dumps({"Status": 4, "StartType": 2, "DisplayName": "Windows Update"}),
+
+            # --- Control 7: MFA (RDP on but NLA enabled) ---
+            "rdp-tcp": json.dumps({"UserAuthentication": 1, "SecurityLayer": 2, "fDenyTSConnections": 0}),
+            "wsman": json.dumps({"Basic": "true", "Kerberos": "true", "Negotiate": "true"}),
+            "win32_deviceguard": json.dumps({
+                "SecurityServicesRunning": [],
+                "VirtualizationBasedSecurityStatus": 0,
+                "not_supported": False,
             }),
-            "get-localgroupmember": json.dumps([
-                {"Name": "WS-REC\\Admin", "SID": "S-1-5-21-xxx-500", "ObjectClass": "User"},
-                {"Name": "WS-REC\\helpdesk", "SID": "S-1-5-21-xxx-1001", "ObjectClass": "User"},
-            ]),
-            "vbawarnings": json.dumps({"VBAWarnings": 3}),  # Signed only
-            "blockcontentexecutionfrominternet": json.dumps({"blockcontentexecutionfrominternet": 1}),
-            "applockerpolicy": json.dumps({
-                "RuleCollections": [
-                    {"RuleCollectionType": "Exe", "EnforcementMode": "AuditOnly"},
-                ],
+
+            # --- Control 8: Backups ---
+            "vss": json.dumps({"Status": 4, "StartType": 3, "DisplayName": "Volume Shadow Copy"}),
+            "$wbresult": json.dumps({
+                "WindowsBackup": {
+                    "LastSuccess": (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S"),
+                    "Versions": 7,
+                },
+                "VSShadows": True,
             }),
-            "appidsvc": json.dumps({"Status": 4, "StartType": 3}),
-            "scriptblocklogging": json.dumps({"EnableScriptBlockLogging": 1}),
-            "languagemode": "FullLanguage",
-            "vss": json.dumps({"Status": 4}),
-            "vssadmin": "Contents of shadow copy set...\nShadow copy created: " + (now - timedelta(days=3)).strftime("%Y-%m-%d"),
-            "get-wbsummary": json.dumps({
-                "LastSuccessfulBackupTime": (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S"),
-                "NumberOfVersions": 7,
+            "lastbackuptime": json.dumps({
+                "LastSuccess": (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S"),
+                "LastAttempt": (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S"),
             }),
         }
