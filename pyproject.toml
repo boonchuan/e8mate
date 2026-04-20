@@ -7,7 +7,7 @@ name = "e8mate"
 version = "0.1.0"
 description = "Open-source Essential Eight compliance scanner for Australian organisations"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     { name = "Boon", email = "boon@e8mate.dev" },
@@ -59,3 +59,9 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["e8mate"]
+
+[tool.hatch.metadata]
+license-files = []

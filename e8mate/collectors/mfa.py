@@ -39,6 +39,82 @@ class MFACollector(BaseCollector):
         self._check_rdp_nla()
         self._check_winrm_settings()
         self._check_credential_guard()
+        self._check_phishing_resistant_mfa()
+        self._check_mfa_event_logging()
+
+    def _check_phishing_resistant_mfa(self):
+        """MFA-ML2-001: Phishing-resistant MFA is deployed."""
+        script = """
+        $whfb = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork" -ErrorAction SilentlyContinue
+        $fido = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\FIDO" -ErrorAction SilentlyContinue
+        @{
+            WindowsHelloEnabled = $whfb.Enabled
+            WHFBPolicyConfigured = ($null -ne $whfb)
+            FIDOPolicyConfigured = ($null -ne $fido)
+        } | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="MFA-ML2-001",
+            control=self.control,
+            title="Phishing-resistant MFA deployed",
+            description="ML2 requires phishing-resistant MFA (FIDO2, smart cards, Windows Hello for Business) for all users.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.CRITICAL,
+            remediation="Deploy phishing-resistant MFA: Windows Hello for Business, FIDO2 security keys, or smart cards. SMS and app-based OTP are not sufficient for ML2.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("registry", output, "WHfB/FIDO Policy"))
+            try:
+                import json
+                settings = json.loads(output)
+                if settings.get("WindowsHelloEnabled") == 1 or settings.get("FIDOPolicyConfigured"):
+                    finding.outcome = ControlOutcome.EFFECTIVE
+                    finding.description = "Phishing-resistant MFA (Windows Hello for Business or FIDO2) is configured."
+                else:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "No phishing-resistant MFA policy detected. SMS/OTP-based MFA is insufficient for ML2."
+            except Exception:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_mfa_event_logging(self):
+        """MFA-ML2-002: MFA events are centrally logged."""
+        script = """
+        $logSize = (Get-WinEvent -ListLog Security -ErrorAction SilentlyContinue).MaximumSizeInBytes
+        $recentAuthEvents = Get-WinEvent -LogName Security -FilterXPath "*[System[EventID=4624 or EventID=4625]]" -MaxEvents 5 -ErrorAction SilentlyContinue |
+        Select-Object TimeCreated, Id, Message | ConvertTo-Json
+        @{ LogMaxSizeBytes = $logSize; RecentAuthEvents = $recentAuthEvents } | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="MFA-ML2-002",
+            control=self.control,
+            title="MFA events are centrally logged",
+            description="ML2 requires successful and unsuccessful MFA events to be centrally logged.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.MEDIUM,
+            remediation="Ensure authentication events (Event IDs 4624/4625) are logged and forwarded to a SIEM or central log collector.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "Auth Event Logging"))
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = "Authentication event logging is active."
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+
         return self.build_result()
 
     def _check_rdp_nla(self):

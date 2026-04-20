@@ -65,6 +65,8 @@ class PatchOSCollector(BaseCollector):
         self._check_recent_patches()
         self._check_auto_update_configured()
         self._check_update_service_running()
+        self._check_critical_patch_48h()
+        self._check_vulnerability_scanner()
         return self.build_result()
 
     def _check_os_supported(self):
@@ -312,6 +314,86 @@ class PatchOSCollector(BaseCollector):
                     finding.outcome = ControlOutcome.INEFFECTIVE
                     finding.description = f"Windows Update service status: {status}, start type: {start_type}."
             except json.JSONDecodeError:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+
+    def _check_critical_patch_48h(self):
+        """PO-ML2-001: Critical patches applied within 48 hours."""
+        script = """
+        $criticalUpdates = Get-HotFix | Where-Object {
+            $_.Description -match 'Security Update' -and
+            $_.InstalledOn -gt (Get-Date).AddDays(-90)
+        } | Sort-Object InstalledOn -Descending | Select-Object -First 5 |
+        Select-Object HotFixID, InstalledOn, Description | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="PO-ML2-001",
+            control=self.control,
+            title="Critical OS patches applied within 48 hours",
+            description="ML2 requires critical/actively exploited OS vulnerabilities patched within 48 hours.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.CRITICAL,
+            remediation="Implement automated patch deployment for critical security updates with a 48-hour SLA.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "Critical Security Updates"))
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = "Critical security updates found and recently applied."
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_vulnerability_scanner(self):
+        """PO-ML2-002: Vulnerability scanner runs at least fortnightly."""
+        script = """
+        $defStatus = Get-MpComputerStatus -ErrorAction SilentlyContinue |
+        Select-Object AntivirusSignatureLastUpdated, LastFullScanEndTime,
+                      LastQuickScanEndTime, AntivirusEnabled | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="PO-ML2-002",
+            control=self.control,
+            title="Vulnerability scanning at least fortnightly",
+            description="ML2 requires vulnerability scanners to identify missing patches at least fortnightly.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.HIGH,
+            remediation="Deploy a vulnerability scanner (e.g., Microsoft Defender, Qualys, Tenable) and schedule fortnightly scans.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "Defender Status"))
+            try:
+                import json
+                status = json.loads(output)
+                last_scan = status.get("LastFullScanEndTime") or status.get("LastQuickScanEndTime")
+                if last_scan:
+                    scan_date = self._parse_ps_date(last_scan)
+                    if scan_date:
+                        days_since = (datetime.now() - scan_date).days
+                        if days_since <= 14:
+                            finding.outcome = ControlOutcome.EFFECTIVE
+                            finding.description = f"Last scan {days_since} days ago. Within fortnightly threshold."
+                        else:
+                            finding.outcome = ControlOutcome.INEFFECTIVE
+                            finding.description = f"Last scan {days_since} days ago. Exceeds fortnightly threshold."
+                    else:
+                        finding.outcome = ControlOutcome.NO_VISIBILITY
+                else:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "No scan history found."
+            except Exception:
                 finding.outcome = ControlOutcome.NO_VISIBILITY
         else:
             finding.outcome = ControlOutcome.NO_VISIBILITY

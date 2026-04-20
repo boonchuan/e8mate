@@ -37,6 +37,91 @@ class AppHardeningCollector(BaseCollector):
         self._check_powershell_logging()
         self._check_powershell_language_mode()
         self._check_dotnet_legacy()
+        self._check_powershell_logging()
+        self._check_cmd_process_logging()
+
+    def _check_powershell_logging(self):
+        """AH-ML2-001: PowerShell script block logging is enabled."""
+        script = """
+        $psLogging = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging" -ErrorAction SilentlyContinue
+        @{
+            EnableScriptBlockLogging = $psLogging.EnableScriptBlockLogging
+            EnableScriptBlockInvocationLogging = $psLogging.EnableScriptBlockInvocationLogging
+            PolicyConfigured = ($null -ne $psLogging)
+        } | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AH-ML2-001",
+            control=self.control,
+            title="PowerShell script block logging enabled",
+            description="ML2 requires PowerShell script block logging to detect malicious script execution.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.HIGH,
+            remediation="Enable PowerShell Script Block Logging via Group Policy: Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("registry", output, "PowerShell ScriptBlockLogging"))
+            try:
+                import json
+                settings = json.loads(output)
+                if settings.get("EnableScriptBlockLogging") == 1:
+                    finding.outcome = ControlOutcome.EFFECTIVE
+                    finding.description = "PowerShell script block logging is enabled."
+                else:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "PowerShell script block logging is not enabled."
+            except Exception:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_cmd_process_logging(self):
+        """AH-ML2-002: Command line process creation events are logged."""
+        script = """
+        $cmdLogging = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit" -ErrorAction SilentlyContinue
+        @{
+            ProcessCreationIncludeCmdLine = $cmdLogging.ProcessCreationIncludeCmdLine_Enabled
+            PolicyConfigured = ($null -ne $cmdLogging)
+        } | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AH-ML2-002",
+            control=self.control,
+            title="Command line process creation logging enabled",
+            description="ML2 requires command line process creation events to be logged.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.HIGH,
+            remediation="Enable 'Include command line in process creation events' via Group Policy: Computer Configuration > Administrative Templates > System > Audit Process Creation.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("registry", output, "Process Creation Audit"))
+            try:
+                import json
+                settings = json.loads(output)
+                if settings.get("ProcessCreationIncludeCmdLine") == 1:
+                    finding.outcome = ControlOutcome.EFFECTIVE
+                    finding.description = "Command line process creation logging is enabled."
+                else:
+                    finding.outcome = ControlOutcome.INEFFECTIVE
+                    finding.description = "Command line process creation logging is not enabled."
+            except Exception:
+                finding.outcome = ControlOutcome.NO_VISIBILITY
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+
         return self.build_result()
 
     def _check_ie11_disabled(self):

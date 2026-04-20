@@ -39,6 +39,97 @@ class AdminPrivsCollector(BaseCollector):
         self._check_domain_admins()
         self._check_default_admin_disabled()
         self._check_inactive_admin_accounts()
+        self._check_separate_admin_accounts()
+        self._check_admin_internet_restriction()
+        self._check_privileged_access_logging()
+
+    def _check_separate_admin_accounts(self):
+        """AP-ML2-001: Privileged accounts are separate from standard user accounts."""
+        script = """
+        $admins = Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue |
+        Select-Object Name, ObjectClass, PrincipalSource | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AP-ML2-001",
+            control=self.control,
+            title="Separate privileged and unprivileged accounts",
+            description="ML2 requires privileged accounts to be separate from standard user accounts.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.HIGH,
+            remediation="Create dedicated admin accounts (e.g., adm-username) separate from daily-use accounts.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "Local Administrators"))
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = "Local administrators group membership collected for review."
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_admin_internet_restriction(self):
+        """AP-ML2-002: Privileged accounts cannot access the internet."""
+        script = """
+        $proxySettings = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue |
+        Select-Object ProxyEnable, ProxyServer, AutoConfigURL | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AP-ML2-002",
+            control=self.control,
+            title="Privileged accounts restricted from internet access",
+            description="ML2 requires privileged accounts to not have internet access unless explicitly authorised.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.HIGH,
+            remediation="Use firewall rules or proxy configuration to block internet access for admin accounts.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("registry", output, "Proxy Settings"))
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = "Internet access settings collected for privileged account review."
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_privileged_access_logging(self):
+        """AP-ML2-003: Privileged access events are centrally logged."""
+        script = """
+        $auditPolicy = auditpol /get /subcategory:"Logon" 2>$null
+        $secLog = Get-WinEvent -LogName Security -MaxEvents 1 -ErrorAction SilentlyContinue |
+        Select-Object TimeCreated, Id | ConvertTo-Json
+        @{ AuditPolicy = $auditPolicy; SecurityLog = $secLog } | ConvertTo-Json
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AP-ML2-003",
+            control=self.control,
+            title="Privileged access events are logged",
+            description="ML2 requires privileged access events to be centrally logged.",
+            maturity_level=MaturityLevel.ML2,
+            severity=Severity.MEDIUM,
+            remediation="Enable audit policies for logon events and ensure logs are forwarded to a SIEM.",
+            asd_reference="https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight",
+        )
+
+        if output and not output.startswith("[ERROR]"):
+            finding.evidence.append(self.create_evidence("powershell", output, "Audit Policy"))
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = "Security audit logging is configured."
+        else:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+
         return self.build_result()
 
     def _check_local_admins(self):
