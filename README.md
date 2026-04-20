@@ -1,128 +1,127 @@
-# JFSR Revision — Execution Plan
+# 🛡️ E8Mate — Open Source Essential Eight Compliance Scanner
 
-Three patches to apply to your existing `~/lib_cross_venue/` pipeline, in order.
-Minimum-diff; does not touch the files that produced the FRO submission.
+**Automated assessment of your organisation's cybersecurity posture against Australia's [ASD Essential Eight](https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/essential-eight) framework.**
 
-Working directory: `~/` (where `fetch_cross_venue.py` and `compute_metrics.py` live)
-
----
-
-## Prep
-
-```bash
-# Use system python3 — venv is empty. No activation needed.
-cd ~
-export DATABENTO_API_KEY="db-..."   # your actual key
-
-# Drop these three files in ~/
-ls patch_1_dates.sh compute_spread_decomp.py build_jfsr_tables.py
-```
+[![PyPI](https://img.shields.io/pypi/v/e8mate?color=00e5b0&label=PyPI)](https://pypi.org/project/e8mate/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Security Score](https://img.shields.io/badge/security8.work-Grade%20A-00e5b0)](https://security8.work)
 
 ---
 
-## Patch 1 — Add pre-period dates to fetch script
+## Why E8Mate?
+
+The Essential Eight is Australia's baseline cybersecurity framework — mandatory for Commonwealth agencies, increasingly required by cyber insurers and government supply chains.
+
+**The problem:** No open-source tool to automatically assess Essential Eight compliance. Existing options are expensive commercial products or manual Excel checklists.
+
+**E8Mate fixes this.** Free, open-source, and supports three frameworks:
+
+- 🇦🇺 **Essential Eight** — ASD Maturity Model (Australia)
+- 🇸🇬 **Cyber Essentials** — CSA SS 712:2025 (Singapore)
+- 🌏 **CIS Controls v8** — Global best practices
+
+## Quick Start
 
 ```bash
-chmod +x patch_1_dates.sh
-./patch_1_dates.sh
+# Install from PyPI
+pip install e8mate
+
+# Scan the local Windows machine
+e8mate scan
+
+# Generate HTML audit report
+e8mate scan --format html --output report.html
+
+# Scan with mock data (for testing on Linux/macOS)
+e8mate scan --transport mock --scenario partial
 ```
 
-This adds March 25–28 to the `DATES` list in `fetch_cross_venue.py`. Idempotent. Creates a `.bak` backup.
+## Web Scanner
 
-Then estimate cost and pull:
+Try it now at **[security8.work](https://security8.work)** — free external scan of any domain against all three frameworks. No signup required.
+
+## Essential Eight Controls
+
+All 8 controls implemented at Maturity Level 1 with 28 checks:
+
+| # | Control | Checks | Status |
+|---|---------|--------|--------|
+| 1 | Application Control | 3 | ✅ |
+| 2 | Patch Applications | 3 | ✅ |
+| 3 | Configure MS Office Macros | 3 | ✅ |
+| 4 | User Application Hardening | 4 | ✅ |
+| 5 | Restrict Admin Privileges | 4 | ✅ |
+| 6 | Patch Operating Systems | 5 | ✅ |
+| 7 | Multi-Factor Authentication | 3 | ✅ |
+| 8 | Regular Backups | 3 | ✅ |
+
+## How It Works
+
+```
+Collectors (28 checks)  -->  Scoring (ML0-ML3)  -->  Reporters (JSON/HTML)
+       |
+  Transport Layer
+  +-- LocalPS      Windows PowerShell (direct)
+  +-- WinRM        Remote Windows scanning
+  +-- Mock         Dev/demo (3 scenarios)
+```
+
+## SaaS Dashboard
+
+Multi-tenant MSP dashboard at [security8.work/dashboard](https://security8.work/dashboard/):
+
+- Client management with per-org framework selection
+- One-click external scans with grade tracking
+- Branded printable reports (PDF via print)
+- Scheduled scans (daily/weekly/monthly)
+- Remediation tracker with auto-resolve on re-scan
+- User management and audit logging
+
+## Nuclei Templates
+
+Companion [Nuclei](https://github.com/projectdiscovery/nuclei) templates for Essential Eight:
 
 ```bash
-python3 fetch_cross_venue.py --estimate       # see incremental cost
-python3 fetch_cross_venue.py --run --resume   # --resume skips April 1/4/7 you already have
+nuclei -t nuclei-templates/ -u https://target.example.com -tags essential-eight
 ```
 
-**Expected:** 400 new slices (5 venues × 4 dates × 20 stocks). Roughly equal to one of your prior event-window pulls in size; budget similar cost.
+## Development
+
+```bash
+git clone https://github.com/boonchuan/e8mate.git
+cd e8mate
+pip install -e ".[dev]"
+pytest
+ruff check .
+```
+
+## Roadmap
+
+- [x] v0.1 — All 8 controls at ML1, 28 checks, JSON/HTML reports
+- [x] v0.1 — Web scanner at security8.work (14 external checks)
+- [x] v0.1 — Multi-framework support (AU/SG/Global)
+- [x] v0.1 — SaaS dashboard for MSPs
+- [x] v0.1 — Published on PyPI
+- [ ] v0.2 — ML2/ML3 rule definitions
+- [ ] v0.3 — Microsoft Graph API (MFA, Conditional Access)
+- [ ] v0.4 — Branded PDF report generation
+- [ ] v0.5 — Client portal (client-facing login)
+
+## Disclaimer
+
+E8Mate is an **assessment tool**, not a certification body. Only ASD-approved assessors can formally certify Essential Eight maturity levels.
+
+## Contributing
+
+Contributions welcome! Priority areas: ML2/ML3 rule definitions, Nuclei templates, test coverage, documentation.
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## Patch 2 — Add spread decomposition
+Built with 🇦🇺🤝🇸🇬 by [Boon](https://github.com/boonchuan) for the Australian and Singaporean cybersecurity community.
 
-After the pre-period data is in place:
-
-```bash
-python3 compute_spread_decomp.py               # all venues, all dates
-```
-
-**Subset option if you want to smoke-test first:**
-
-```bash
-python3 compute_spread_decomp.py --venues XNAS --stocks AAPL MSFT --dates 2025-04-04
-```
-
-**Runtime:** Most expensive step in the pipeline. Reconstructs top-of-book from MBO for every slice. Expect ~10–30 seconds per XNAS slice, faster on secondary venues. Total for full 7-date × 4-venue × 20-stock panel: **~2-4 hours**. Resume-capable; incremental save every 20 slices.
-
-**If you're short on time:** Run only XNAS and ARCX (the primary venues with meaningful spreads anyway):
-
-```bash
-python3 compute_spread_decomp.py --venues XNAS ARCX --resume
-```
-
-That cuts runtime roughly in half and captures 95% of the manuscript value. XPSX and XBOS have so few trades per window that their spread numbers are noisy anyway.
-
-**Output:** `~/lib_cross_venue/spread_metrics.csv`
-
----
-
-## Patch 3 — Build JFSR tables & figures
-
-```bash
-python3 build_jfsr_tables.py
-```
-
-**Runtime:** Under a minute. Produces `~/lib_cross_venue/output_jfsr/`:
-
-- `jfsr_table1_summary.csv` — sample summary
-- `jfsr_table2_microstructure.csv` — core metrics by period × venue
-- `jfsr_table3_spread_decomp.csv` — spread decomposition
-- `jfsr_table4_regression.csv` — cross-sectional OLS with HC3 SE
-- `jfsr_table5_did.csv` — DiD venue × post interactions with clustered SE
-- `jfsr_table6_placebo.csv` — Mar 25 vs Mar 28 placebo
-- `jfsr_figure1_mechanism.pdf` + `.png`
-- `jfsr_figure2_distribution.pdf` + `.png`
-- `jfsr_main_findings.md` — headline numbers to paste into the manuscript
-
----
-
-## What to send back
-
-When everything's run, paste me the contents of:
-
-```bash
-cat ~/lib_cross_venue/output_jfsr/jfsr_main_findings.md
-cat ~/lib_cross_venue/output_jfsr/jfsr_table2_microstructure.csv
-cat ~/lib_cross_venue/output_jfsr/jfsr_table3_spread_decomp.csv
-cat ~/lib_cross_venue/output_jfsr/jfsr_table4_regression.csv
-cat ~/lib_cross_venue/output_jfsr/jfsr_table5_did.csv
-cat ~/lib_cross_venue/output_jfsr/jfsr_table6_placebo.csv
-```
-
-And scp the two figure PDFs:
-
-```bash
-scp ~/lib_cross_venue/output_jfsr/jfsr_figure*.pdf YOUR_LOCAL_MACHINE:
-```
-
-I'll plug everything into the manuscript scaffold and produce the submission-ready JFSR docx with cross-venue identification as the main identification story.
-
----
-
-## Checkpoints
-
-After patch 1: `ls ~/lib_cross_venue/raw/XNAS/2025-03-25/ | wc -l` should return 20.
-
-After patch 2: `wc -l ~/lib_cross_venue/spread_metrics.csv` should be ~560 (140 per venue × 4 venues) or ~280 if you ran only XNAS+ARCX.
-
-After patch 3: `ls ~/lib_cross_venue/output_jfsr/` should show all 8 output files.
-
----
-
-## If things go sideways
-
-- **MBO reconstruction fails on a venue:** XBOS and XPSX have very sparse books. If spread numbers come out as NaN for those venues, it's because there were no valid TOB moments. That's fine; just drop those rows.
-- **Databento API rate-limits:** `fetch_cross_venue.py` already has `--resume`. Just re-run.
-- **Memory blows up on large files:** The large XNAS files (>2GB parquet) can exceed RAM during TOB reconstruction. If so, `--stocks` flag lets you process one stock at a time: `for s in AAPL MSFT NVDA; do python3 compute_spread_decomp.py --stocks $s --resume; done`.
+[security8.work](https://security8.work) · [PyPI](https://pypi.org/project/e8mate/) · [GitHub](https://github.com/boonchuan/e8mate)
