@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "e8mate"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source Essential Eight compliance scanner for Australian organisations"
 readme = "README.md"
 license = {text = "MIT"}
