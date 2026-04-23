@@ -35,6 +35,7 @@ class BackupsCollector(BaseCollector):
         self._check_vss_enabled()
         self._check_backup_exists()
         self._check_backup_recent()
+        self._check_backup_covers_user_data()
         return self.build_result()
 
     def _check_vss_enabled(self):
@@ -194,5 +195,130 @@ class BackupsCollector(BaseCollector):
                 finding.outcome = ControlOutcome.NO_VISIBILITY
         else:
             finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_backup_covers_user_data(self):
+        """BK-ML1-004: Windows Backup policy includes user profile data."""
+        script = """
+        try {
+            $policy = Get-WBPolicy -ErrorAction Stop
+            if (-not $policy) {
+                @{ "no_policy" = $true } | ConvertTo-Json
+                return
+            }
+
+            $volumes = @(Get-WBVolume -Policy $policy -ErrorAction SilentlyContinue |
+                         ForEach-Object { $_.MountPath })
+            $fileSpecs = @(Get-WBFileSpec -Policy $policy -ErrorAction SilentlyContinue |
+                           ForEach-Object { $_.FileSpec })
+            $bareMetal = [bool](Get-WBBareMetalRecovery -Policy $policy -ErrorAction SilentlyContinue)
+            $systemState = [bool](Get-WBSystemState -Policy $policy -ErrorAction SilentlyContinue)
+
+            # A full-volume backup of C: is the canonical way user data is included.
+            $systemDrive = $env:SystemDrive
+            $covers_system_volume = $volumes -contains $systemDrive -or $volumes -contains "$systemDrive\\"
+
+            # Otherwise, look for an explicit FileSpec under the Users directory.
+            $users_path = "$systemDrive\\Users"
+            $covers_users_filespec = $false
+            foreach ($spec in $fileSpecs) {
+                if ($spec -and $spec.ToLower().StartsWith($users_path.ToLower())) {
+                    $covers_users_filespec = $true
+                    break
+                }
+            }
+
+            @{
+                Volumes = $volumes
+                FileSpecs = $fileSpecs
+                BareMetalRecovery = $bareMetal
+                SystemState = $systemState
+                CoversSystemVolume = $covers_system_volume
+                CoversUsersFileSpec = $covers_users_filespec
+            } | ConvertTo-Json -Depth 3
+        } catch {
+            @{ "not_available" = $true; "error" = $_.Exception.Message } | ConvertTo-Json
+        }
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="BK-ML1-004",
+            control=self.control,
+            title="Backups include user profile data",
+            description=(
+                "The backup policy must cover user profile data (C:\\Users) so that "
+                "documents, settings and credentials can be restored after an incident."
+            ),
+            maturity_level=MaturityLevel.ML1,
+            severity=Severity.HIGH,
+            remediation=(
+                "Configure the Windows Backup policy to back up the full system volume, "
+                "or add an explicit file include for C:\\Users. For third-party backup "
+                "tools, verify that user profile directories are within the backup scope "
+                "and document the inclusion path."
+            ),
+            asd_reference="https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model",
+        )
+
+        if not output or output.startswith("[ERROR]"):
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = "Unable to query backup policy scope."
+            self.findings.append(finding)
+            return
+
+        finding.evidence.append(self.create_evidence("powershell", output, "Backup policy scope"))
+
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            self.findings.append(finding)
+            return
+
+        # Windows Backup feature not installed, or no policy configured.
+        # We cannot confirm coverage from here; a third-party tool may still be
+        # handling this correctly, so report NO_VISIBILITY rather than INEFFECTIVE.
+        if data.get("not_available") or data.get("no_policy"):
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = (
+                "Windows Backup is not configured on this host. If a third-party "
+                "backup tool is in use, verify user profile coverage manually."
+            )
+            self.findings.append(finding)
+            return
+
+        # If neither coverage key is present, the cmdlet returned an unexpected
+        # shape (e.g. permissions issue, partial failure). We cannot tell, so
+        # report NO_VISIBILITY rather than falsely flagging INEFFECTIVE.
+        if "CoversSystemVolume" not in data and "CoversUsersFileSpec" not in data:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = (
+                "Backup policy data unavailable; unable to verify user profile coverage."
+            )
+            self.findings.append(finding)
+            return
+
+        covers_volume = bool(data.get("CoversSystemVolume"))
+        covers_users = bool(data.get("CoversUsersFileSpec"))
+
+        if covers_volume:
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = (
+                "System volume is included in the backup policy; "
+                "user profile data will be captured."
+            )
+        elif covers_users:
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = (
+                "Backup policy explicitly includes the user profile directory."
+            )
+        else:
+            finding.outcome = ControlOutcome.INEFFECTIVE
+            finding.description = (
+                "Backup policy does not cover the system volume or user profile "
+                "directory. User documents and settings will not be recoverable."
+            )
 
         self.findings.append(finding)

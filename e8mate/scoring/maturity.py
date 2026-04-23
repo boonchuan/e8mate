@@ -41,15 +41,27 @@ def calculate_control_maturity(result: ControlResult) -> MaturityLevel:
             # No checks defined for this level — can't assess it
             break
 
+        # Exclude NO_VISIBILITY checks from the determination entirely — they
+        # represent "we couldn't verify", not "this failed". We still need at
+        # least one determinative check at the level to make any claim.
+        determinative = [
+            f for f in level_findings
+            if f.outcome != ControlOutcome.NO_VISIBILITY
+        ]
+
+        if not determinative:
+            # Every check at this level was inconclusive — cannot claim it
+            break
+
         all_effective = all(
             f.outcome in (ControlOutcome.EFFECTIVE, ControlOutcome.ALTERNATE_CONTROL, ControlOutcome.NOT_APPLICABLE)
-            for f in level_findings
+            for f in determinative
         )
 
         if all_effective:
             achieved = MaturityLevel(level)
         else:
-            # Failed at this level — can't claim higher
+            # A determinative check failed at this level — can't claim higher
             break
 
     return achieved
