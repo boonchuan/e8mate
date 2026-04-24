@@ -35,6 +35,7 @@ class AppControlCollector(BaseCollector):
         self._check_applocker_or_wdac()
         self._check_applocker_service()
         self._check_applocker_enforcement()
+        self._check_applocker_has_custom_rules()
         return self.build_result()
 
     def _check_applocker_or_wdac(self):
@@ -196,5 +197,149 @@ class AppControlCollector(BaseCollector):
                 finding.outcome = ControlOutcome.NO_VISIBILITY
         else:
             finding.outcome = ControlOutcome.NO_VISIBILITY
+
+        self.findings.append(finding)
+
+    def _check_applocker_has_custom_rules(self):
+        """AC-ML1-004: AppLocker policy contains rules beyond Microsoft defaults."""
+        script = """
+        $policy = Get-AppLockerPolicy -Effective -ErrorAction SilentlyContinue
+        if (-not $policy) {
+            @{ "not_available" = $true } | ConvertTo-Json
+            return
+        }
+
+        $collections = @()
+        foreach ($rc in $policy.RuleCollections) {
+            $rules = @($rc)
+            $total = $rules.Count
+            $defaults = 0
+            $custom = 0
+            $denies = 0
+
+            foreach ($rule in $rules) {
+                $name = if ($rule.Name) { $rule.Name } else { "" }
+                $action = if ($rule.Action) { "$($rule.Action)" } else { "" }
+
+                if ($action -eq "Deny") {
+                    $denies++
+                } elseif ($name.StartsWith("(Default Rule)")) {
+                    $defaults++
+                } else {
+                    $custom++
+                }
+            }
+
+            $collections += @{
+                Type = "$($rc.RuleCollectionType)"
+                Mode = "$($rc.EnforcementMode)"
+                TotalRules = $total
+                DefaultRules = $defaults
+                CustomAllowRules = $custom
+                DenyRules = $denies
+            }
+        }
+
+        @{ Collections = $collections } | ConvertTo-Json -Depth 4
+        """
+        output = self.run_powershell(script)
+
+        finding = Finding(
+            check_id="AC-ML1-004",
+            control=self.control,
+            title="Application control policy contains meaningful rules",
+            description=(
+                "The AppLocker policy must contain deny rules or custom allow rules "
+                "beyond Microsoft's default allow-all-of-Program-Files defaults. "
+                "An enforced policy with only default rules does not actually "
+                "restrict what can run."
+            ),
+            maturity_level=MaturityLevel.ML1,
+            severity=Severity.HIGH,
+            remediation=(
+                "Add explicit deny rules for known LOLBins (e.g. mshta.exe, "
+                "regsvr32.exe, wscript.exe) or replace the default allow-all rules "
+                "with a curated allowlist of approved applications. Consider "
+                "deploying Microsoft's recommended block rules via WDAC."
+            ),
+            asd_reference="https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model",
+        )
+
+        if not output or output.startswith("[ERROR]"):
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = "Unable to query AppLocker policy contents."
+            self.findings.append(finding)
+            return
+
+        finding.evidence.append(self.create_evidence("powershell", output, "AppLocker rule inventory"))
+
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            self.findings.append(finding)
+            return
+
+        # ConvertTo-Json may emit a top-level array in some edge cases
+        # (e.g. mock-transport sentinels, or a single-collection policy
+        # rendered by PowerShell as a single-element array). If we get
+        # anything other than a dict, we cannot evaluate the policy shape.
+        if not isinstance(data, dict):
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = (
+                "AppLocker policy returned in an unexpected shape; "
+                "unable to evaluate rule composition."
+            )
+            self.findings.append(finding)
+            return
+
+        if data.get("not_available"):
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = (
+                "AppLocker is not available on this host (likely Windows Home SKU "
+                "or no policy configured). If WDAC is in use, verify meaningful "
+                "rules are deployed manually."
+            )
+            self.findings.append(finding)
+            return
+
+        collections = data.get("Collections")
+        # JSON may encode a single collection as a dict rather than a list.
+        if isinstance(collections, dict):
+            collections = [collections]
+        elif collections is None:
+            collections = []
+
+        if not collections:
+            finding.outcome = ControlOutcome.INEFFECTIVE
+            finding.description = (
+                "AppLocker policy has no rule collections. No applications are "
+                "being restricted."
+            )
+            self.findings.append(finding)
+            return
+
+        total_custom = sum(int(c.get("CustomAllowRules", 0) or 0) for c in collections)
+        total_denies = sum(int(c.get("DenyRules", 0) or 0) for c in collections)
+        total_defaults = sum(int(c.get("DefaultRules", 0) or 0) for c in collections)
+
+        if total_denies > 0 or total_custom > 0:
+            finding.outcome = ControlOutcome.EFFECTIVE
+            parts = []
+            if total_denies > 0:
+                parts.append(f"{total_denies} deny rule(s)")
+            if total_custom > 0:
+                parts.append(f"{total_custom} custom allow rule(s)")
+            finding.description = (
+                f"AppLocker policy contains {' and '.join(parts)} across "
+                f"{len(collections)} rule collection(s)."
+            )
+        else:
+            finding.outcome = ControlOutcome.INEFFECTIVE
+            finding.description = (
+                f"AppLocker policy contains only {total_defaults} Microsoft default "
+                "rule(s) and no custom or deny rules. An enforced policy of defaults "
+                "does not meaningfully restrict application execution."
+            )
 
         self.findings.append(finding)
