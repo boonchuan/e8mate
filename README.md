@@ -21,6 +21,11 @@ The Essential Eight is Australia's baseline cybersecurity framework — mandator
 - 🇸🇬 **Cyber Essentials** — CSA SS 712:2025 (Singapore)
 - 🌏 **CIS Controls v8** — Global best practices
 
+**Who this is for:**
+- **Australian SMEs and not-for-profits** without budget for Tenable or Qualys, who still need to demonstrate Essential Eight progress
+- **MSPs and consultants** serving Australian and Singaporean SMBs who want a defensible self-assessment baseline before a formal audit
+- **In-house IT and compliance teams** preparing for a CSA Cyber Essentials or ASD-approved E8 assessment
+
 ## Quick Start
 
 ```bash
@@ -43,18 +48,18 @@ Try it now at **[security8.work](https://security8.work)** — free external sca
 
 ## Essential Eight Controls
 
-All 8 controls implemented at Maturity Level 1 with 28 checks:
+All 8 controls implemented at Maturity Level 1 with 30 checks:
 
 | # | Control | Checks | Status |
 |---|---------|--------|--------|
-| 1 | Application Control | 3 | ✅ |
+| 1 | Application Control | 4 | ✅ |
 | 2 | Patch Applications | 3 | ✅ |
 | 3 | Configure MS Office Macros | 3 | ✅ |
 | 4 | User Application Hardening | 4 | ✅ |
 | 5 | Restrict Admin Privileges | 4 | ✅ |
 | 6 | Patch Operating Systems | 5 | ✅ |
 | 7 | Multi-Factor Authentication | 3 | ✅ |
-| 8 | Regular Backups | 3 | ✅ |
+| 8 | Regular Backups | 4 | ✅ |
 
 ## How It Works
 
@@ -98,7 +103,7 @@ ruff check .
 
 ## Roadmap
 
-- [x] v0.1 — All 8 controls at ML1, 28 checks, JSON/HTML reports
+- [x] v0.1 — All 8 controls at ML1, 30 checks, JSON/HTML reports
 - [x] v0.1 — Web scanner at security8.work (14 external checks)
 - [x] v0.1 — Multi-framework support (AU/SG/Global)
 - [x] v0.1 — SaaS dashboard for MSPs
@@ -107,6 +112,18 @@ ruff check .
 - [ ] v0.3 — Microsoft Graph API (MFA, Conditional Access)
 - [ ] v0.4 — Branded PDF report generation
 - [ ] v0.5 — Client portal (client-facing login)
+
+## Open Source Contributions
+
+E8Mate's author actively contributes Essential Eight and security-tooling content back to the broader ecosystem:
+
+- **[Wazuh](https://github.com/wazuh/wazuh) — [PR #35645](https://github.com/wazuh/wazuh/pull/35645):** ACSC Essential Eight (ML1+ML2) SCA policy for Windows 10/11
+- **[Lynis](https://github.com/CISOfy/lynis) — [PR #1731](https://github.com/CISOfy/lynis/pull/1731):** Nitrux Linux OS detection
+- **[Lynis](https://github.com/CISOfy/lynis) — [PR #1733](https://github.com/CISOfy/lynis/pull/1733):** Kylin Linux Advanced Server detection
+- **[Prowler](https://github.com/prowler-cloud/prowler):** prior merged contributions to AWS compliance checks
+- **[Nuclei Templates](https://github.com/projectdiscovery/nuclei-templates):** prior merged contributions
+
+If you use the tools above and find Essential Eight content useful, please consider starring this repo too — it helps surface E8Mate to others looking for the same.
 
 ## Disclaimer
 
