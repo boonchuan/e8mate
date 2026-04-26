@@ -39,23 +39,51 @@ class AppControlCollector(BaseCollector):
         return self.build_result()
 
     def _check_applocker_or_wdac(self):
-        """AC-ML1-001: AppLocker or WDAC is configured."""
-        script = """
+        """AC-ML1-001: AppLocker or WDAC is configured with at least one rule."""
+        script = r"""
         $result = @{}
-        $al = Get-AppLockerPolicy -Effective -ErrorAction SilentlyContinue
+
+        # AppLocker probe — handle both "module not installed" and
+        # "module installed but no policy" as distinct from "policy exists".
+        $al = $null
+        try {
+            $al = Get-AppLockerPolicy -Effective -ErrorAction Stop
+        } catch [System.Management.Automation.CommandNotFoundException] {
+            $result["AppLockerAvailable"] = $false
+        } catch {
+            $result["AppLockerAvailable"] = $false
+            $result["AppLockerError"] = $_.Exception.Message
+        }
+
         if ($al) {
-            $result["AppLocker"] = $true
-            $result["RuleCollections"] = ($al.RuleCollections | ForEach-Object {
-                @{ Type = $_.RuleCollectionType; Mode = $_.EnforcementMode }
-            })
-        } else {
-            $result["AppLocker"] = $false
+            $result["AppLockerAvailable"] = $true
+            $totalRules = 0
+            $collectionInfo = @()
+            foreach ($rc in $al.RuleCollections) {
+                $count = @($rc).Count
+                $totalRules += $count
+                $collectionInfo += @{
+                    Type = "$($rc.RuleCollectionType)"
+                    Mode = "$($rc.EnforcementMode)"
+                    RuleCount = $count
+                }
+            }
+            $result["AppLockerRuleCount"] = $totalRules
+            $result["AppLockerCollections"] = $collectionInfo
         }
-        $wdac = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\\Microsoft\\Windows\\DeviceGuard -ErrorAction SilentlyContinue
-        if ($wdac) {
-            $result["WDAC_CodeIntegrity"] = $wdac.CodeIntegrityPolicyEnforcementStatus
+
+        # WDAC probe via Win32_DeviceGuard
+        try {
+            $wdac = Get-CimInstance -ClassName Win32_DeviceGuard `
+                -Namespace root\Microsoft\Windows\DeviceGuard `
+                -ErrorAction Stop
+            $result["WDACAvailable"] = $true
+            $result["WDACEnforcementStatus"] = [int]$wdac.CodeIntegrityPolicyEnforcementStatus
+        } catch {
+            $result["WDACAvailable"] = $false
         }
-        $result | ConvertTo-Json -Depth 3
+
+        $result | ConvertTo-Json -Depth 4
         """
         output = self.run_powershell(script)
 
@@ -67,34 +95,73 @@ class AppControlCollector(BaseCollector):
             maturity_level=MaturityLevel.ML1,
             severity=Severity.CRITICAL,
             remediation=(
-                "Implement AppLocker via Group Policy or WDAC via ConfigCI. "
-                "Start with audit mode, then enforce after testing."
+                "Implement AppLocker via Group Policy (Pro/Enterprise) or WDAC via "
+                "ConfigCI / Intune. Start with audit mode, then enforce after testing."
             ),
             asd_reference="https://www.cyber.gov.au/acsc/view-all-content/publications/essential-eight-maturity-model",
         )
 
-        if output and not output.startswith("[ERROR]"):
-            finding.evidence.append(self.create_evidence(
-                "powershell", output, "AppLocker/WDAC status"
-            ))
-
-            try:
-                data = json.loads(output)
-                has_applocker = data.get("AppLocker", False)
-                wdac_status = data.get("WDAC_CodeIntegrity")
-
-                if has_applocker or (wdac_status and wdac_status > 0):
-                    finding.outcome = ControlOutcome.EFFECTIVE
-                    mechanism = "AppLocker" if has_applocker else "WDAC"
-                    finding.description = f"Application control is active via {mechanism}."
-                else:
-                    finding.outcome = ControlOutcome.INEFFECTIVE
-                    finding.description = "No application control (AppLocker/WDAC) detected."
-
-            except json.JSONDecodeError:
-                finding.outcome = ControlOutcome.NO_VISIBILITY
-        else:
+        if not output or output.startswith("[ERROR]"):
             finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = "Unable to query AppLocker or WDAC status."
+            self.findings.append(finding)
+            return
+
+        finding.evidence.append(self.create_evidence(
+            "powershell", output, "AppLocker/WDAC status"
+        ))
+
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError:
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            self.findings.append(finding)
+            return
+
+        if not isinstance(data, dict):
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            self.findings.append(finding)
+            return
+
+        applocker_available = bool(data.get("AppLockerAvailable"))
+        applocker_rules = int(data.get("AppLockerRuleCount", 0) or 0)
+        wdac_available = bool(data.get("WDACAvailable"))
+        wdac_status = int(data.get("WDACEnforcementStatus", 0) or 0)
+
+        # AppLocker counts as configured only if rules actually exist
+        applocker_configured = applocker_available and applocker_rules > 0
+        # WDAC: 0 = off, 1 = audit, 2 = enforce. Anything > 0 is "configured".
+        wdac_configured = wdac_available and wdac_status > 0
+
+        if applocker_configured:
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = (
+                f"Application control is active via AppLocker "
+                f"({applocker_rules} rule(s) deployed)."
+            )
+        elif wdac_configured:
+            mode = "enforce" if wdac_status >= 2 else "audit"
+            finding.outcome = ControlOutcome.EFFECTIVE
+            finding.description = (
+                f"Application control is active via WDAC ({mode} mode)."
+            )
+        elif not applocker_available and not wdac_available:
+            # Cannot query either mechanism on this host (likely Home SKU
+            # or restricted PowerShell). We have no basis to claim either
+            # presence or absence.
+            finding.outcome = ControlOutcome.NO_VISIBILITY
+            finding.description = (
+                "Cannot query AppLocker or WDAC on this host. Application "
+                "control status is unknown; verify manually."
+            )
+        else:
+            # We could query at least one mechanism, but neither has
+            # active configuration.
+            finding.outcome = ControlOutcome.INEFFECTIVE
+            finding.description = (
+                "Neither AppLocker nor WDAC is configured. No application "
+                "control restrictions are in effect."
+            )
 
         self.findings.append(finding)
 
