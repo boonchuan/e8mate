@@ -42,7 +42,7 @@ class AppHardeningCollector(BaseCollector):
 
     def _check_powershell_logging(self):
         """AH-ML2-001: PowerShell script block logging is enabled."""
-        script = """
+        script = r"""
         $psLogging = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging" -ErrorAction SilentlyContinue
         @{
             EnableScriptBlockLogging = $psLogging.EnableScriptBlockLogging
@@ -83,7 +83,7 @@ class AppHardeningCollector(BaseCollector):
 
     def _check_cmd_process_logging(self):
         """AH-ML2-002: Command line process creation events are logged."""
-        script = """
+        script = r"""
         $cmdLogging = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit" -ErrorAction SilentlyContinue
         @{
             ProcessCreationIncludeCmdLine = $cmdLogging.ProcessCreationIncludeCmdLine_Enabled

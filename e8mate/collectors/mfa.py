@@ -45,7 +45,7 @@ class MFACollector(BaseCollector):
 
     def _check_phishing_resistant_mfa(self):
         """MFA-ML2-001: Phishing-resistant MFA is deployed."""
-        script = """
+        script = r"""
         $whfb = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork" -ErrorAction SilentlyContinue
         $fido = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\FIDO" -ErrorAction SilentlyContinue
         @{

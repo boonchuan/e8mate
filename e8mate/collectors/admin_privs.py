@@ -74,7 +74,7 @@ class AdminPrivsCollector(BaseCollector):
 
     def _check_admin_internet_restriction(self):
         """AP-ML2-002: Privileged accounts cannot access the internet."""
-        script = """
+        script = r"""
         $proxySettings = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue |
         Select-Object ProxyEnable, ProxyServer, AutoConfigURL | ConvertTo-Json
         """
