@@ -41,6 +41,7 @@ class MFACollector(BaseCollector):
         self._check_credential_guard()
         self._check_phishing_resistant_mfa()
         self._check_mfa_event_logging()
+        return self.build_result()
 
     def _check_phishing_resistant_mfa(self):
         """MFA-ML2-001: Phishing-resistant MFA is deployed."""

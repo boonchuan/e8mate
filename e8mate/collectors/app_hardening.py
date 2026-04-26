@@ -37,8 +37,8 @@ class AppHardeningCollector(BaseCollector):
         self._check_powershell_logging()
         self._check_powershell_language_mode()
         self._check_dotnet_legacy()
-        self._check_powershell_logging()
         self._check_cmd_process_logging()
+        return self.build_result()
 
     def _check_powershell_logging(self):
         """AH-ML2-001: PowerShell script block logging is enabled."""

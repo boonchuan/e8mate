@@ -42,6 +42,7 @@ class AdminPrivsCollector(BaseCollector):
         self._check_separate_admin_accounts()
         self._check_admin_internet_restriction()
         self._check_privileged_access_logging()
+        return self.build_result()
 
     def _check_separate_admin_accounts(self):
         """AP-ML2-001: Privileged accounts are separate from standard user accounts."""
