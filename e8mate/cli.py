@@ -263,6 +263,50 @@ def score(
     _display_summary(result)
 
 
+@app.command()
+def diff(
+    earlier: str = typer.Argument(..., help="Path to the earlier (baseline) scan JSON report."),
+    later: str = typer.Argument(..., help="Path to the later (current) scan JSON report."),
+):
+    """Compare two scan reports and show what changed.
+
+    Shows regressed and improved controls, highlights checks whose outcome
+    flipped, and surfaces overall maturity changes between the two scans.
+
+    Example:
+        e8mate diff scan-2026-04-20.json scan-2026-04-26.json
+    """
+    from e8mate.reporters.json_reporter import load_scan_result
+    from e8mate.diff import diff_scans, render_diff
+
+    earlier_path = Path(earlier)
+    later_path = Path(later)
+
+    if not earlier_path.exists():
+        console.print(f"[red]❌ Earlier scan file not found: {earlier}[/red]")
+        raise typer.Exit(code=1)
+    if not later_path.exists():
+        console.print(f"[red]❌ Later scan file not found: {later}[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        earlier_result = load_scan_result(str(earlier_path))
+    except Exception as e:
+        console.print(f"[red]❌ Failed to parse earlier scan: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        later_result = load_scan_result(str(later_path))
+    except Exception as e:
+        console.print(f"[red]❌ Failed to parse later scan: {e}[/red]")
+        raise typer.Exit(code=1)
+
+    diff_result = diff_scans(earlier_result, later_result)
+    console.print()
+    console.print(render_diff(diff_result))
+    console.print()
+
+
 def _display_summary(result):
     """Render a rich summary table of scan results."""
     console.print()
