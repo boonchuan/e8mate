@@ -10,6 +10,6 @@ Usage:
   API:  from e8mate.scanners import scan_domain
 """
 
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 __author__ = "Boon"
 __license__ = "MIT"
