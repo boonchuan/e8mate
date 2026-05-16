@@ -120,7 +120,8 @@ E8Mate's author actively contributes Essential Eight and security-tooling conten
 - **[Wazuh](https://github.com/wazuh/wazuh) — [PR #35645](https://github.com/wazuh/wazuh/pull/35645):** ACSC Essential Eight (ML1+ML2) SCA policy for Windows 10/11
 - **[Lynis](https://github.com/CISOfy/lynis) — [PR #1731](https://github.com/CISOfy/lynis/pull/1731):** Nitrux Linux OS detection
 - **[Lynis](https://github.com/CISOfy/lynis) — [PR #1733](https://github.com/CISOfy/lynis/pull/1733):** Kylin Linux Advanced Server detection
-- **[Prowler](https://github.com/prowler-cloud/prowler):** prior merged contributions to AWS compliance checks
+- **[Prowler](https://github.com/prowler-cloud/prowler) — [PR #10780](https://github.com/prowler-cloud/prowler/pull/10780):** nginx reverse proxy configuration in `contrib/reverse-proxy/` (merged)
+- **[Prowler](https://github.com/prowler-cloud/prowler) — [PR #10808](https://github.com/prowler-cloud/prowler/pull/10808):** ASD Essential Eight compliance framework for AWS (pending review)
 - **[Nuclei Templates](https://github.com/projectdiscovery/nuclei-templates):** prior merged contributions
 
 If you use the tools above and find Essential Eight content useful, please consider starring this repo too — it helps surface E8Mate to others looking for the same.
